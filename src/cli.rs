@@ -20,7 +20,7 @@ const FC_MAX_COMMANDS_ENV: &str = "FC_MAX_COMMANDS";
 const FC_TIMEOUT_MS_ENV: &str = "FC_TIMEOUT_MS";
 
 #[derive(Debug, Parser)]
-#[command(name = "swegrep-cli", version)]
+#[command(name = "swe-grep", version)]
 #[command(disable_help_subcommand = true)]
 struct Cli {
     #[command(subcommand)]
@@ -62,7 +62,7 @@ struct ExtractKeyArgs {
     #[arg(long, help = "Path to Windsurf state.vscdb. Default is auto-detect.")]
     db_path: Option<PathBuf>,
 
-    #[arg(long, help = "Save extracted key to swegrep config.")]
+    #[arg(long, help = "Save extracted key to swe-tools config.")]
     save: bool,
 
     #[arg(long, help = "Print the full key instead of a masked key.")]
@@ -440,7 +440,7 @@ mod tests {
         fs::create_dir_all(&bin_dir).unwrap();
         fs::write(skill_dir.join(SKILL_FILE_NAME), "").unwrap();
 
-        let current_exe = bin_dir.join("swegrep-cli");
+        let current_exe = bin_dir.join("swe-grep");
         assert_eq!(
             packaged_skill_dir_from(Some(&current_exe)).as_deref(),
             Some(skill_dir.as_path())
@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn packaged_skill_dir_ignores_regular_bin_dirs() {
         let tmp = TempDir::new().unwrap();
-        let current_exe = tmp.path().join("bin").join("swegrep-cli");
+        let current_exe = tmp.path().join("bin").join("swe-grep");
 
         assert_eq!(packaged_skill_dir_from(Some(&current_exe)), None);
     }
@@ -465,7 +465,7 @@ mod tests {
         let expected = skill_dir.join(ENV_FILE_NAME);
 
         assert_eq!(
-            packaged_config_file_from(Some(&bin_dir.join("swegrep-cli")), ENV_FILE_NAME).as_deref(),
+            packaged_config_file_from(Some(&bin_dir.join("swe-grep")), ENV_FILE_NAME).as_deref(),
             Some(expected.as_path())
         );
     }

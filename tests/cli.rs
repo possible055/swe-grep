@@ -24,7 +24,7 @@ fn extract_key_show_prints_full_key_and_source() {
     let db_path = tmp.path().join("state.vscdb");
     write_auth_db(&db_path, "sk-ws-01-mock");
 
-    let output = Command::cargo_bin("swegrep-cli")
+    let output = Command::cargo_bin("swe-grep")
         .unwrap()
         .args(["extract-key", "--show", "--db-path"])
         .arg(&db_path)
@@ -42,7 +42,7 @@ fn extract_key_show_prints_full_key_and_source() {
 #[test]
 fn search_requires_rg() {
     let tmp = TempDir::new().unwrap();
-    let output = Command::cargo_bin("swegrep-cli")
+    let output = Command::cargo_bin("swe-grep")
         .unwrap()
         .args(["search", "dummy_query", "--path"])
         .arg(tmp.path())
@@ -58,11 +58,11 @@ fn search_requires_rg() {
 #[test]
 fn search_accepts_bundled_rg_when_path_is_empty() {
     let tmp = TempDir::new().unwrap();
-    let binary_name = format!("swegrep-cli{}", std::env::consts::EXE_SUFFIX);
+    let binary_name = format!("swe-grep{}", std::env::consts::EXE_SUFFIX);
     let bundled_rg_name = format!("rg{}", std::env::consts::EXE_SUFFIX);
     let bundled_bin = tmp.path().join(binary_name);
     let bundled_rg = tmp.path().join(bundled_rg_name);
-    fs::copy(assert_cmd::cargo::cargo_bin("swegrep-cli"), &bundled_bin).unwrap();
+    fs::copy(assert_cmd::cargo::cargo_bin("swe-grep"), &bundled_bin).unwrap();
     fs::write(&bundled_rg, "").unwrap();
 
     let missing_project = tmp.path().join("missing-project");
@@ -81,7 +81,7 @@ fn search_accepts_bundled_rg_when_path_is_empty() {
 
 #[test]
 fn search_requires_path() {
-    let output = Command::cargo_bin("swegrep-cli")
+    let output = Command::cargo_bin("swe-grep")
         .unwrap()
         .args(["search", "dummy_query"])
         .output()
@@ -95,7 +95,7 @@ fn search_requires_path() {
 #[test]
 fn search_rejects_turns_below_minimum() {
     let tmp = TempDir::new().unwrap();
-    let output = Command::cargo_bin("swegrep-cli")
+    let output = Command::cargo_bin("swe-grep")
         .unwrap()
         .args(["search", "dummy_query", "--path"])
         .arg(tmp.path())

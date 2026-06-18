@@ -1,8 +1,8 @@
 ---
 name: swe-grep
-description: Use swegrep-cli for semantic codebase search in local repositories. Best for broad natural-language questions about implementation paths, feature flow, and relevant files. Use ripgrep for exact keyword lookup.
+description: Use swe-grep for semantic codebase search in local repositories. Best for broad natural-language questions about implementation paths, feature flow, and relevant files. Use ripgrep for exact keyword lookup.
 metadata:
-  short-description: Semantic codebase search with swegrep-cli
+  short-description: Semantic codebase search with swe-grep
 ---
 
 # SWE Grep
@@ -18,8 +18,8 @@ Use this skill when the user asks a codebase question that benefits from semanti
 ## Binary
 
 The packaged executable is located next to this skill file under:
-- Linux: `./bin/swegrep-cli`
-- Windows: `.\bin\swegrep-cli.exe`
+- Linux: `./bin/swe-grep`
+- Windows: `.\bin\swe-grep.exe`
 
 ## Command
 
@@ -27,7 +27,7 @@ The packaged executable is located next to this skill file under:
 
 Run codebase search from the target repository root:
 ```sh
-./bin/swegrep-cli search "<natural language query>" --path <repo-path> --turns 4
+./bin/swe-grep search "<natural language query>" --path <repo-path> --turns 4
 ```
 
 **Parameters:**
@@ -40,10 +40,10 @@ Run codebase search from the target repository root:
 When credentials are missing, try extracting and saving them:
 
 ```sh
-./bin/swegrep-cli extract-key --save
+./bin/swe-grep extract-key --save
 ```
 
 **Parameters:**
-* `--save`: Save the extracted key to the swegrep config.
+* `--save`: Save the extracted key to the shared `swe-tools` config.
 * `--show`: Print the full key instead of a masked key.
 * `--db-path <path>`: Read a specific Windsurf `state.vscdb` file instead of auto-detecting it.

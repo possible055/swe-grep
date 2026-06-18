@@ -16,7 +16,7 @@ impl fmt::Display for RgResolutionError {
         match self {
             Self::EnvPathNotFound(path) => write!(
                 f,
-                "Error: ripgrep ('rg') was not found at SWEGREP_RG_PATH={}.\nHint: provide a valid SWEGREP_RG_PATH, place bundled rg next to swegrep-cli, or install rg in PATH.",
+                "Error: ripgrep ('rg') was not found at SWEGREP_RG_PATH={}.\nHint: provide a valid SWEGREP_RG_PATH, place bundled rg next to swe-grep, or install rg in PATH.",
                 path.display()
             ),
             Self::NotFound => write!(f, "{}", ripgrep_not_found_message()),
@@ -33,7 +33,7 @@ pub(crate) fn resolve_rg_path() -> Result<PathBuf, RgResolutionError> {
 }
 
 pub(crate) fn ripgrep_not_found_message() -> &'static str {
-    "Error: ripgrep ('rg') is required but was not found. Provide SWEGREP_RG_PATH, place bundled rg next to swegrep-cli, or install rg in PATH."
+    "Error: ripgrep ('rg') is required but was not found. Provide SWEGREP_RG_PATH, place bundled rg next to swe-grep, or install rg in PATH."
 }
 
 fn resolve_rg_path_from(
@@ -127,7 +127,7 @@ mod tests {
 
         let resolved = resolve_rg_path_from(
             Some(env_rg.clone().into_os_string()),
-            Some(bundled_dir.join("swegrep-cli")),
+            Some(bundled_dir.join("swe-grep")),
             Some(path_dir.into_os_string()),
         )
         .unwrap();
@@ -148,7 +148,7 @@ mod tests {
 
         let resolved = resolve_rg_path_from(
             None,
-            Some(bundled_dir.join("swegrep-cli")),
+            Some(bundled_dir.join("swe-grep")),
             Some(path_dir.into_os_string()),
         )
         .unwrap();
@@ -160,7 +160,7 @@ mod tests {
     fn missing_rg_returns_clear_error() {
         let tmp = TempDir::new().unwrap();
         let error =
-            resolve_rg_path_from(None, Some(tmp.path().join("swegrep-cli")), None).unwrap_err();
+            resolve_rg_path_from(None, Some(tmp.path().join("swe-grep")), None).unwrap_err();
 
         assert_eq!(error, RgResolutionError::NotFound);
         assert!(error.to_string().contains("SWEGREP_RG_PATH"));

@@ -1,8 +1,8 @@
-# swegrep-cli
+# swe-grep
 
 [English](README.md) | 简体中文
 
-`swegrep-cli` 是一个用于 Windsurf Context 子代理（subagent）兼容代码搜索的 Rust 命令行工具（CLI）。它向 `GetDevstralStream` 发送自然语言查询，在您的工作树（working tree）中执行 `restricted_exec` 本地搜索命令，并返回最相关的 文件 和 行范围。
+`swe-grep` 是一个用于 Windsurf Context 子代理（subagent）兼容代码搜索的 Rust 命令行工具（CLI）。它向 `GetDevstralStream` 发送自然语言查询，在您的工作树（working tree）中执行 `restricted_exec` 本地搜索命令，并返回最相关的 文件 和 行范围。
 
 ## 范围
 
@@ -18,7 +18,7 @@
 
 ```bash
 cargo build --release
-./target/release/swegrep-cli --help
+./target/release/swe-grep --help
 ```
 
 ## 开发检查
@@ -34,13 +34,13 @@ cargo test
 ### 搜索代码
 
 ```bash
-swegrep-cli search "where is authentication handled" --path /path/to/project
+swe-grep search "where is authentication handled" --path /path/to/project
 ```
 
 可选参数：
 
 ```bash
-swegrep-cli search "query" \
+swe-grep search "query" \
   --path /path/to/project \
   --api-key sk-ws-01-... \
   --turns 4
@@ -52,16 +52,16 @@ swegrep-cli search "query" \
 ### 提取 Windsurf API 密钥
 
 ```bash
-swegrep-cli extract-key
-swegrep-cli extract-key --save
-swegrep-cli extract-key --show
-swegrep-cli extract-key --db-path /path/to/state.vscdb
+swe-grep extract-key
+swe-grep extract-key --save
+swe-grep extract-key --show
+swe-grep extract-key --db-path /path/to/state.vscdb
 ```
 
-`--save` 将提取的密钥写入：
+`--save` 将提取的密钥写入共享的 `swe-tools` 配置：
 
-- macOS / Linux: `~/.config/swegrep/config.json`
-- Windows: `~/.swegrep/config.json`
+- macOS / Linux: `~/.config/swe-tools/config.json`
+- Windows: `~/swe-tool/config.json`
 
 ## 身份验证
 
@@ -137,7 +137,7 @@ export SWEGREP_PATH_FILTER=0
 | `FC_MAX_TURNS` | `4` | `search` 的默认最大搜索轮数 |
 | `FC_TIMEOUT_MS` | `30000` | 流式传输超时（毫秒） |
 | `SWEGREP_DEBUG` | `0` | 设为 `1`、`true`、`yes` 或 `on` 时启用模型回应诊断 |
-| `SWEGREP_DEBUG_LOG` | `~/.config/swegrep/debug.log` | 已解析模型回应与 final answer XML 的 debug log 路径 |
+| `SWEGREP_DEBUG_LOG` | `~/.config/swe-tools/debug.log` | 已解析模型回应与 final answer XML 的 debug log 路径 |
 
 ## 致谢
 

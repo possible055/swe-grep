@@ -20,7 +20,7 @@ pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<Strin
         }
         if let Some(discovered) = credentials::discover_api_key(None) {
             eprintln!(
-                "[swegrep-cli] Passed API key looks truncated; using key discovered from Windsurf"
+                "[swe-grep] Passed API key looks truncated; using key discovered from Windsurf"
             );
             return Ok(discovered);
         }
@@ -32,7 +32,7 @@ pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<Strin
             && let Some(discovered) = credentials::discover_api_key(None)
         {
             eprintln!(
-                "[swegrep-cli] WINDSURF_API_KEY looks truncated; using key discovered from Windsurf"
+                "[swe-grep] WINDSURF_API_KEY looks truncated; using key discovered from Windsurf"
             );
             return Ok(discovered);
         }
@@ -40,7 +40,7 @@ pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<Strin
     }
 
     if let Some(cached) = credentials::load_cached_api_key(Some(&credentials::get_config_path())) {
-        eprintln!("[swegrep-cli] Using cached API key from config");
+        eprintln!("[swe-grep] Using cached API key from config");
         return Ok(cached);
     }
 

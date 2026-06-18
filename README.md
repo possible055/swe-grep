@@ -1,8 +1,8 @@
-# swegrep-cli
+# swe-grep
 
 English | [简体中文](README_zh.md)
 
-`swegrep-cli` is a Rust CLI for Windsurf Context subagent-compatible code search. It sends a natural-language query to `GetDevstralStream`, executes `restricted_exec` local search commands against your working tree, and returns the most relevant files and line ranges.
+`swe-grep` is a Rust CLI for Windsurf Context subagent-compatible code search. It sends a natural-language query to `GetDevstralStream`, executes `restricted_exec` local search commands against your working tree, and returns the most relevant files and line ranges.
 
 ## Scope
 
@@ -18,7 +18,7 @@ English | [简体中文](README_zh.md)
 
 ```bash
 cargo build --release
-./target/release/swegrep-cli --help
+./target/release/swe-grep --help
 ```
 
 ## Development Checks
@@ -34,13 +34,13 @@ cargo test
 ### Search Code
 
 ```bash
-swegrep-cli search "where is authentication handled" --path /path/to/project
+swe-grep search "where is authentication handled" --path /path/to/project
 ```
 
 Optional flags:
 
 ```bash
-swegrep-cli search "query" \
+swe-grep search "query" \
   --path /path/to/project \
   --api-key sk-ws-01-... \
   --turns 4
@@ -52,16 +52,16 @@ swegrep-cli search "query" \
 ### Extract a Windsurf API Key
 
 ```bash
-swegrep-cli extract-key
-swegrep-cli extract-key --save
-swegrep-cli extract-key --show
-swegrep-cli extract-key --db-path /path/to/state.vscdb
+swe-grep extract-key
+swe-grep extract-key --save
+swe-grep extract-key --show
+swe-grep extract-key --db-path /path/to/state.vscdb
 ```
 
-`--save` writes the extracted key to:
+`--save` writes the extracted key to the shared `swe-tools` config:
 
-- macOS / Linux: `~/.config/swegrep/config.json`
-- Windows: `~/.swegrep/config.json`
+- macOS / Linux: `~/.config/swe-tools/config.json`
+- Windows: `~/swe-tool/config.json`
 
 ## Authentication
 
@@ -137,7 +137,7 @@ Supported variables:
 | `FC_MAX_TURNS` | `4` | Default maximum search rounds for `search` |
 | `FC_TIMEOUT_MS` | `30000` | Streaming timeout in milliseconds |
 | `SWEGREP_DEBUG` | `0` | Enable model-response diagnostics when set to `1`, `true`, `yes`, or `on` |
-| `SWEGREP_DEBUG_LOG` | `~/.config/swegrep/debug.log` | Debug log path for parsed model responses and final answer XML |
+| `SWEGREP_DEBUG_LOG` | `~/.config/swe-tools/debug.log` | Debug log path for parsed model responses and final answer XML |
 
 ## Acknowledgements
 

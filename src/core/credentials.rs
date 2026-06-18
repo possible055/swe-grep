@@ -57,9 +57,9 @@ impl ExtractKeyResult {
 pub fn get_config_path() -> PathBuf {
     let home = home_dir();
     if cfg!(target_os = "windows") {
-        home.join(".swegrep").join("config.json")
+        home.join("swe-tool").join("config.json")
     } else {
-        home.join(".config").join("swegrep").join("config.json")
+        home.join(".config").join("swe-tools").join("config.json")
     }
 }
 

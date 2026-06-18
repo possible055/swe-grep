@@ -1,3 +1,3 @@
 fn main() {
-    std::process::exit(swegrep_cli::cli::run());
+    std::process::exit(swe_grep::cli::run());
 }
