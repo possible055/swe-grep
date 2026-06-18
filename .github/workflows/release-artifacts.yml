@@ -24,15 +24,15 @@ jobs:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             ripgrep_target: x86_64-unknown-linux-musl
-            artifact: swegrep-cli-linux-x86_64-musl
-            archive: swegrep-cli-linux-x86_64-musl.tar.gz
+            artifact: swe-grep-linux-x86_64-musl
+            archive: swe-grep-linux-x86_64-musl.tar.gz
             cc_env: CC_x86_64_unknown_linux_musl
             linker_env: CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER
           - os: windows-2025
             target: x86_64-pc-windows-msvc
             ripgrep_target: x86_64-pc-windows-msvc
-            artifact: swegrep-cli-windows-x86_64
-            archive: swegrep-cli-windows-x86_64.zip
+            artifact: swe-grep-windows-x86_64
+            archive: swe-grep-windows-x86_64.zip
 
     steps:
       - name: Checkout
@@ -120,14 +120,14 @@ jobs:
 
       - name: Smoke test
         if: runner.os != 'Windows'
-        run: ./target/${{ matrix.target }}/release/swegrep-cli --help
+        run: ./target/${{ matrix.target }}/release/swe-grep --help
 
       - name: Check Linux binary compatibility
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          binary="./target/${{ matrix.target }}/release/swegrep-cli"
+          binary="./target/${{ matrix.target }}/release/swe-grep"
 
           if [[ "${{ matrix.target }}" == *-musl ]]; then
             if readelf --version-info "$binary" 2>/dev/null | grep -q 'GLIBC_'; then
@@ -150,7 +150,7 @@ jobs:
 
       - name: Smoke test
         if: runner.os == 'Windows'
-        run: .\target\${{ matrix.target }}\release\swegrep-cli.exe --help
+        run: .\target\${{ matrix.target }}\release\swe-grep.exe --help
 
       - name: Package Linux artifact
         if: runner.os != 'Windows'
@@ -160,18 +160,18 @@ jobs:
           rm -rf dist
           staging="dist/swe-grep"
           mkdir -p "$staging/bin"
-          cp "target/${{ matrix.target }}/release/swegrep-cli" "$staging/bin/"
+          cp "target/${{ matrix.target }}/release/swe-grep" "$staging/bin/"
           cp "target/ripgrep/rg" "$staging/bin/"
           cp SKILL.md "$staging/"
           cp .env.example "$staging/.env"
           cp include.txt exclude.txt "$staging/"
           chmod 755 "$staging" "$staging/bin"
           chmod 644 "$staging/SKILL.md" "$staging/.env" "$staging/include.txt" "$staging/exclude.txt"
-          chmod 755 "$staging/bin/swegrep-cli" "$staging/bin/rg"
-          test -x "$staging/bin/swegrep-cli"
+          chmod 755 "$staging/bin/swe-grep" "$staging/bin/rg"
+          test -x "$staging/bin/swe-grep"
           test -x "$staging/bin/rg"
           "$staging/bin/rg" --version
-          env PATH="" "$staging/bin/swegrep-cli" search dummy_query --path "$staging/missing-project" 2> "$staging/smoke.stderr" && exit 1
+          env PATH="" "$staging/bin/swe-grep" search dummy_query --path "$staging/missing-project" 2> "$staging/smoke.stderr" && exit 1
           grep -q "Project path does not exist" "$staging/smoke.stderr"
           ! grep -q "ripgrep" "$staging/smoke.stderr"
           rm "$staging/smoke.stderr"
@@ -186,7 +186,7 @@ jobs:
           Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
           $staging = "dist\swe-grep"
           New-Item -ItemType Directory -Force "$staging\bin" | Out-Null
-          Copy-Item "target\${{ matrix.target }}\release\swegrep-cli.exe" "$staging\bin"
+          Copy-Item "target\${{ matrix.target }}\release\swe-grep.exe" "$staging\bin"
           Copy-Item "target\ripgrep\rg.exe" "$staging\bin"
           Copy-Item SKILL.md $staging
           Copy-Item .env.example "$staging\.env"
@@ -198,7 +198,7 @@ jobs:
           $originalPath = $env:PATH
           $env:PATH = ""
           try {
-            & "$staging\bin\swegrep-cli.exe" search dummy_query --path "$staging\missing-project" 2> "$staging\smoke.stderr"
+            & "$staging\bin\swe-grep.exe" search dummy_query --path "$staging\missing-project" 2> "$staging\smoke.stderr"
             $smokeExitCode = $LASTEXITCODE
             if ($smokeExitCode -eq 0) {
               throw "Expected smoke test search to fail on missing project path"
@@ -232,13 +232,13 @@ jobs:
           retention-days: 30
 
   package-gnu:
-    name: Package swegrep-cli-linux-x86_64-gnu
+    name: Package swe-grep-linux-x86_64-gnu
     runs-on: ubuntu-24.04
     env:
       GNU_TARGET: x86_64-unknown-linux-gnu
       GNU_RIPGREP_TARGET: x86_64-unknown-linux-musl
-      GNU_ARTIFACT: swegrep-cli-linux-x86_64-gnu
-      GNU_ARCHIVE: swegrep-cli-linux-x86_64-gnu.tar.gz
+      GNU_ARTIFACT: swe-grep-linux-x86_64-gnu
+      GNU_ARCHIVE: swe-grep-linux-x86_64-gnu.tar.gz
       GNU_TARGET_DIR: target/gnu
       MAX_GLIBC_VERSION: "2.24"
     steps:
@@ -272,7 +272,7 @@ jobs:
               rustup target add "$GNU_TARGET"
               cargo build --release --locked --target "$GNU_TARGET"
 
-              binary="$CARGO_TARGET_DIR/$GNU_TARGET/release/swegrep-cli"
+              binary="$CARGO_TARGET_DIR/$GNU_TARGET/release/swe-grep"
               max_glibc="$(readelf --version-info "$binary" \
                 | grep -oE "GLIBC_[0-9]+\.[0-9]+" \
                 | sort -Vu \
@@ -310,7 +310,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary="${GNU_TARGET_DIR}/${GNU_TARGET}/release/swegrep-cli"
+          binary="${GNU_TARGET_DIR}/${GNU_TARGET}/release/swe-grep"
           docker run --rm -v "$PWD:/work:ro" -w /work debian:9 "$binary" --help
           docker run --rm -v "$PWD:/work:ro" -w /work ubuntu:18.04 "$binary" --help
 
@@ -321,18 +321,18 @@ jobs:
           rm -rf dist
           staging="dist/swe-grep"
           mkdir -p "$staging/bin"
-          cp "${GNU_TARGET_DIR}/${GNU_TARGET}/release/swegrep-cli" "$staging/bin/"
+          cp "${GNU_TARGET_DIR}/${GNU_TARGET}/release/swe-grep" "$staging/bin/"
           cp "target/ripgrep/rg" "$staging/bin/"
           cp SKILL.md "$staging/"
           cp .env.example "$staging/.env"
           cp include.txt exclude.txt "$staging/"
           chmod 755 "$staging" "$staging/bin"
           chmod 644 "$staging/SKILL.md" "$staging/.env" "$staging/include.txt" "$staging/exclude.txt"
-          chmod 755 "$staging/bin/swegrep-cli" "$staging/bin/rg"
-          test -x "$staging/bin/swegrep-cli"
+          chmod 755 "$staging/bin/swe-grep" "$staging/bin/rg"
+          test -x "$staging/bin/swe-grep"
           test -x "$staging/bin/rg"
           "$staging/bin/rg" --version
-          env PATH="" "$staging/bin/swegrep-cli" search dummy_query --path "$staging/missing-project" 2> "$staging/smoke.stderr" && exit 1
+          env PATH="" "$staging/bin/swe-grep" search dummy_query --path "$staging/missing-project" 2> "$staging/smoke.stderr" && exit 1
           grep -q "Project path does not exist" "$staging/smoke.stderr"
           ! grep -q "ripgrep" "$staging/smoke.stderr"
           rm "$staging/smoke.stderr"
