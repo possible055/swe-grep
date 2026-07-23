@@ -1,46 +1,32 @@
 ---
 name: swe-grep
-description: Use swe-grep for semantic codebase search in local repositories. Best for broad natural-language questions about implementation paths, feature flow, and relevant files. Use ripgrep for exact keyword lookup.
+description: Use swe-grep for semantic codebase search in local repositories. Best for broad natural-language questions about implementation paths, feature flow, and relevant files. Use when the user asks where a behavior, API, feature, command, or configuration is implemented, which files are most relevant before making a change, how an authentication, request, parsing, execution, or persistence flow is wired, or where to continue investigation when exact identifiers are unknown; for exact keyword lookup, use ripgrep instead.
 metadata:
   short-description: Semantic codebase search with swe-grep
 ---
 
 # SWE Grep
 
-## When To Use
-
-Use this skill when the user asks a codebase question that benefits from semantic or natural-language search, such as:
-- Where a behavior, API, feature, command, or configuration is implemented.
-- Which files are most relevant before making a change.
-- How an authentication, request, parsing, execution, or persistence flow is wired.
-- Where to continue investigation when exact identifiers are unknown.
-
-## Binary
-
-The packaged executable is located next to this skill file under:
-- Linux: `./bin/swe-grep`
-- Windows: `.\bin\swe-grep.exe`
-
-## Command
-
-### Codebase Search
+## Codebase Search
 
 Run codebase search from the target repository root:
 ```sh
-./bin/swe-grep search "<natural language query>" --path <repo-path> --turns 4
+swe-grep search "<natural language query>" --path <repo-path> --turns 4
 ```
 
 **Parameters:**
 * `<natural language query>`: A broad semantic question about the codebase.
 * `--path`: Target repository root to search. Use an absolute path when possible.
-* `--turns <4-6>`: Maximum search rounds. Use `4` by default for normal questions. Increase to `5` or `6` only when the task is broad, ambiguous, or likely to require deeper codebase traversal.
+* `--turns <4-6>`: Maximum search rounds. Use `4` by default for normal questions.
 
-### Extract Key
+Increase to `5` or `6` when the task is broad, ambiguous, or likely to require deeper codebase traversal.
+
+## Extract Key
 
 When credentials are missing, try extracting and saving them:
 
 ```sh
-./bin/swe-grep extract-key --save
+swe-grep extract-key --save
 ```
 
 **Parameters:**

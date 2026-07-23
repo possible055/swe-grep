@@ -14,6 +14,56 @@ English | [简体中文](README_zh.md)
 
 - A logged-in Windsurf installation or a valid Windsurf API key
 
+## Install on Linux
+
+Install the latest static Linux release interactively, then choose cross-client Agent Skills, Cursor, Claude Code, or a custom skill directory:
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh | sh
+```
+
+For a non-interactive cross-client user installation:
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
+  | sh -s -- --host agents --scope user --yes
+```
+
+The installer verifies the release archive SHA-256 checksum before extracting it. It installs the shared runtime at `${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime`, always creates `~/.local/bin/swe-grep`, and persists that launcher through `~/.profile`. `--host agents` uses the cross-client `~/.agents/skills` convention, `--host cursor` uses `~/.cursor/skills`, and `--host claude` uses `~/.claude/skills`. The former `--host codex` name remains available as an alias for `agents`. Use `--scope project` to install below the current Git repository, or `--host custom --path /path/to/skills` for another skill parent directory. If another `swe-grep` command is already present in `PATH`, the installer stops without changing its precedence.
+
+Remove a managed Linux installation by passing the same host, scope, or custom path used during installation:
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
+  | sh -s -- --uninstall --host agents --scope user --yes
+```
+
+Each command removes one managed Skill. The shared runtime, launcher, and installer-owned `.profile` block are removed after the last managed Skill is uninstalled. Modified `SKILL.md` files are never deleted automatically, non-installer files in Skill directories are preserved, and unrelated shell configuration is left unchanged. Timestamped backups created by `--force` are intentionally retained.
+
+## Install on Windows
+
+Run the interactive installer from Windows PowerShell 5.1 or later:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 | iex
+```
+
+For a non-interactive cross-client user installation:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Client agents -Scope user -Yes
+```
+
+The Windows installer supports `-Client agents|cursor|claude|custom`; `codex` remains an alias for `agents`. It verifies the release SHA-256 checksum, installs the shared runtime at `%LOCALAPPDATA%\swe-grep\runtime`, and always creates an isolated launcher at `%LOCALAPPDATA%\swe-grep\bin\swe-grep.cmd`. Only the launcher directory is added to the User `PATH`, so the bundled `rg.exe` is not exposed. Existing commands with the same name cause installation to stop without changing their precedence. Windows 10 or Windows Server 2016 and an x64 environment are required.
+
+Remove a managed Windows installation by passing the same client, scope, or custom path used during installation:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Uninstall -Client agents -Scope user -Yes
+```
+
+Each command removes one managed Skill. The shared runtime and launcher are removed after the last managed Skill is uninstalled. The installer removes the launcher directory from User `PATH` only when it originally added that exact entry; every other entry and separator is preserved. Modified `SKILL.md` and non-installer files are left untouched. Timestamped backups created by `-Force` are intentionally retained.
+
 ## Build
 
 ```bash
@@ -100,12 +150,12 @@ Additional rules:
 - Empty lines and lines starting with `#` are ignored.
 - Hidden dot-paths such as `.cache/` are excluded unless explicitly included.
 
-Filter files are loaded only from the packaged `swe-grep` directory:
+Filter files are loaded only from the shared runtime directory:
 
-| File | Location |
+| Platform | Location |
 | --- | --- |
-| `include.txt` | `swe-grep/include.txt` |
-| `exclude.txt` | `swe-grep/exclude.txt` |
+| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime/{include.txt,exclude.txt}` |
+| Windows | `%LOCALAPPDATA%\swe-grep\runtime\{include.txt,exclude.txt}` |
 
 Disable shared path filtering with:
 
@@ -115,9 +165,10 @@ export SWEGREP_PATH_FILTER=0
 
 ## Environment Variables
 
-At startup, the CLI optionally loads the packaged environment file:
+At startup, the CLI optionally loads the shared runtime environment file:
 
-- `swe-grep/.env`
+- Linux: `${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime/.env`
+- Windows: `%LOCALAPPDATA%\swe-grep\runtime\.env`
 
 Packaged `.env` values are commented by default.
 

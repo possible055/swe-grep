@@ -38,6 +38,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Windows installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          foreach ($script in @('scripts/install.ps1', 'scripts/test-install-windows.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -ne 0) {
+              $errors | Format-List | Out-String | Write-Error
+              exit 1
+            }
+          }
+
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
@@ -179,6 +197,20 @@ jobs:
           cd dist
           sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
 
+      - name: Test Linux installer
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/test-install-linux.sh "$PWD/dist"
+          for image in ubuntu:20.04 ubuntu:26.04 debian:9; do
+            docker run --rm \
+              -v "$PWD:/work:ro" \
+              -w /work \
+              "$image" \
+              sh scripts/test-install-linux.sh /work/dist
+          done
+
       - name: Package Windows artifact
         if: runner.os == 'Windows'
         shell: pwsh
@@ -220,6 +252,12 @@ jobs:
           $hash = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ matrix.archive }}" | Out-File -FilePath "${{ matrix.archive }}.sha256" -Encoding ascii
           Pop-Location
+
+      - name: Test Windows installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & scripts/test-install-windows.ps1 -ReleaseDirectory (Resolve-Path dist).Path
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -360,11 +398,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+
+      - name: Add installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n scripts/install.sh
+          cp scripts/install.sh dist/install.sh
+          cp scripts/install.ps1 dist/install.ps1
+          chmod 755 dist/install.sh
 
       - name: Create release
         env:

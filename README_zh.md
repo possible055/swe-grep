@@ -14,6 +14,56 @@
 
 - 已登录的 Windsurf 客户端或有效的 Windsurf API 密钥
 
+## 在 Linux 安装
+
+以下命令会交互式安装最新的静态 Linux 发行包，并让您选择跨客户端 Agent Skills、Cursor、Claude Code 或自定义 Skill 目录：
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh | sh
+```
+
+以下为跨客户端用户范围的非交互式安装：
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
+  | sh -s -- --host agents --scope user --yes
+```
+
+安装器会在解压前验证发行包的 SHA-256 校验和，将共享 runtime 安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime`，固定建立 `~/.local/bin/swe-grep`，并通过 `~/.profile` 持久化 launcher。`--host agents` 使用跨客户端惯例 `~/.agents/skills`，`--host cursor` 使用 `~/.cursor/skills`，而 `--host claude` 使用 `~/.claude/skills`。原有的 `--host codex` 名称会继续作为 `agents` 的兼容别名。使用 `--scope project` 可安装到当前 Git 仓库下；使用 `--host custom --path /path/to/skills` 可指定其他 Skill 父目录。如果 `PATH` 已存在其他 `swe-grep` 命令，安装器会停止，且不会改变其优先级。
+
+移除 Linux 安装时，请传入安装时使用的相同 host、scope 或自定义路径：
+
+```bash
+curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
+  | sh -s -- --uninstall --host agents --scope user --yes
+```
+
+每次命令只移除一个受管理的 Skill。最后一个 Skill 移除后，才会清理共享 runtime、launcher 与安装器管理的 `.profile` 区块。安装器不会自动删除已修改的 `SKILL.md`，会保留 Skill 目录中的其他文件，也不会修改无关的 shell 配置。由 `--force` 建立的时间戳备份会刻意保留。
+
+## 在 Windows 安装
+
+在 Windows PowerShell 5.1 或更高版本中运行交互式安装器：
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 | iex
+```
+
+以下为跨客户端用户范围的非交互式安装：
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Client agents -Scope user -Yes
+```
+
+Windows 安装器支持 `-Client agents|cursor|claude|custom`；`codex` 会继续作为 `agents` 的兼容别名。安装器会验证发行包的 SHA-256 校验和，将共享 runtime 安装到 `%LOCALAPPDATA%\swe-grep\runtime`，并固定建立隔离的 `%LOCALAPPDATA%\swe-grep\bin\swe-grep.cmd`。只有 launcher 目录会加入 User `PATH`，因此不会暴露打包的 `rg.exe`。如果已存在同名命令，安装器会停止且不会改变其优先级。最低要求为 Windows 10 或 Windows Server 2016，以及 x64 环境。
+
+移除 Windows 安装时，请传入安装时使用的相同 client、scope 或自定义路径：
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Uninstall -Client agents -Scope user -Yes
+```
+
+每次命令只移除一个受管理的 Skill。最后一个 Skill 移除后，才会清理共享 runtime 与 launcher。只有当安装器曾加入完全相同的 User `PATH` 项目时，移除流程才会删除该项目；其他项目与分隔符都会保留。已修改的 `SKILL.md` 与非安装器文件不会被删除。由 `-Force` 建立的时间戳备份会刻意保留。
+
 ## 构建
 
 ```bash
@@ -100,12 +150,12 @@ swe-grep extract-key --db-path /path/to/state.vscdb
 - 忽略空行和以 `#` 开头的行。
 - 排除隐藏的点路径（例如 `.cache/`），除非显式包含。
 
-过滤文件只会从打包的 `swe-grep` 目录加载：
+过滤文件只会从共享 runtime 目录加载：
 
-| 文件 | 位置 |
+| 平台 | 位置 |
 | --- | --- |
-| `include.txt` | `swe-grep/include.txt` |
-| `exclude.txt` | `swe-grep/exclude.txt` |
+| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime/{include.txt,exclude.txt}` |
+| Windows | `%LOCALAPPDATA%\swe-grep\runtime\{include.txt,exclude.txt}` |
 
 通过以下方式禁用共享路径过滤：
 
@@ -115,9 +165,10 @@ export SWEGREP_PATH_FILTER=0
 
 ## 环境变量
 
-启动时，CLI 会选择性加载打包的环境文件：
+启动时，CLI 会选择性加载共享 runtime 的环境文件：
 
-- `swe-grep/.env`
+- Linux：`${XDG_DATA_HOME:-$HOME/.local/share}/swe-grep/runtime/.env`
+- Windows：`%LOCALAPPDATA%\swe-grep\runtime\.env`
 
 打包的 `.env` 默认全部注释。
 
