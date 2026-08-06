@@ -107,3 +107,22 @@ fn search_rejects_turns_below_minimum() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("turns must be between 4 and 6"));
 }
+
+#[test]
+fn search_warns_once_for_an_invalid_environment_value() {
+    let tmp = TempDir::new().unwrap();
+    let output = Command::cargo_bin("swe-grep")
+        .unwrap()
+        .args(["search", "dummy_query", "--path"])
+        .arg(tmp.path())
+        .env("FC_MAX_TURNS", "10")
+        .env("PATH", "")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let warning = "Config warning: Invalid FC_MAX_TURNS value \"10\"; using default 4";
+    assert_eq!(stderr.matches(warning).count(), 1);
+    assert!(stderr.contains("ripgrep"));
+}

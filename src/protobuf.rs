@@ -65,9 +65,15 @@ pub fn decode_varint(buf: &[u8], mut offset: usize) -> (u64, usize) {
     while offset < buf.len() {
         let byte = buf[offset];
         offset += 1;
+        if shift >= 64 {
+            break;
+        }
         value |= ((byte & 0x7f) as u64) << shift;
         shift += 7;
         if byte & 0x80 == 0 {
+            break;
+        }
+        if shift >= 64 && (byte & 0x80) != 0 {
             break;
         }
     }
@@ -190,6 +196,21 @@ mod tests {
 
         assert_eq!(decode_varint(b"\x00", 0), (0, 1));
         assert_eq!(decode_varint(b"\xac\x02", 0), (300, 2));
+    }
+
+    #[test]
+    fn malformed_and_overlong_varints_are_bounded() {
+        let malformed = [0x80_u8];
+        assert_eq!(decode_varint(&malformed, 0), (0, 1));
+        assert!(extract_strings(&malformed).is_empty());
+
+        let overlong = [0x80_u8; 11];
+
+        let (value, offset) = decode_varint(&overlong, 0);
+
+        assert_eq!(value, 0);
+        assert_eq!(offset, 10);
+        assert!(extract_strings(&overlong).is_empty());
     }
 
     #[test]

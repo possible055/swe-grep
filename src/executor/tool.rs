@@ -1,9 +1,10 @@
+use crate::config;
 use crate::path_filter::{PathFilter, PathFilterConfig};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use super::helpers::{bounded_int, normalize_path, read_int_env};
+use super::helpers::normalize_path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TruncationProfile {
@@ -51,6 +52,22 @@ impl ToolExecutor {
         line_max_chars: Option<usize>,
         path_filter_config: PathFilterConfig,
     ) -> Self {
+        Self::with_resolved_limits_and_filter(
+            project_root,
+            config::fc_result_max_lines(result_max_lines),
+            config::fc_readfile_max_lines(),
+            config::fc_line_max_chars(line_max_chars),
+            path_filter_config,
+        )
+    }
+
+    fn with_resolved_limits_and_filter(
+        project_root: impl AsRef<Path>,
+        general_result_max_lines: usize,
+        readfile_result_max_lines: usize,
+        tool_line_max_chars: usize,
+        path_filter_config: PathFilterConfig,
+    ) -> Self {
         let root = project_root
             .as_ref()
             .canonicalize()
@@ -60,19 +77,9 @@ impl ToolExecutor {
         Self {
             root,
             collected_rg_patterns: Arc::new(Mutex::new(Vec::new())),
-            general_result_max_lines: bounded_int(
-                result_max_lines,
-                read_int_env("FC_RESULT_MAX_LINES", 80, 1, 500),
-                1,
-                500,
-            ),
-            readfile_result_max_lines: read_int_env("FC_READFILE_MAX_LINES", 400, 1, 10_000),
-            tool_line_max_chars: bounded_int(
-                line_max_chars,
-                read_int_env("FC_LINE_MAX_CHARS", 300, 20, 10_000),
-                20,
-                10_000,
-            ),
+            general_result_max_lines,
+            readfile_result_max_lines,
+            tool_line_max_chars,
             path_filter,
         }
     }
@@ -157,8 +164,8 @@ impl ToolExecutor {
         let mut truncated = Vec::with_capacity(limit);
 
         for line in lines.iter().take(limit) {
-            if line.len() > line_max_chars {
-                truncated.push(line[..line_max_chars].to_string());
+            if line.chars().count() > line_max_chars {
+                truncated.push(line.chars().take(line_max_chars).collect());
             } else {
                 truncated.push((*line).to_string());
             }
@@ -185,26 +192,21 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::fs;
-    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn set_env_var(key: &str, value: &str) {
-        // SAFETY: tests take a global env lock before mutating process environment.
-        unsafe {
-            std::env::set_var(key, value);
-        }
-    }
-
-    fn remove_env_var(key: &str) {
-        // SAFETY: tests take a global env lock before mutating process environment.
-        unsafe {
-            std::env::remove_var(key);
-        }
+    fn executor_with_limits(
+        project_root: impl AsRef<Path>,
+        general_result_max_lines: usize,
+        readfile_result_max_lines: usize,
+        line_max_chars: usize,
+    ) -> ToolExecutor {
+        ToolExecutor::with_resolved_limits_and_filter(
+            project_root,
+            general_result_max_lines,
+            readfile_result_max_lines,
+            line_max_chars,
+            PathFilterConfig::default(),
+        )
     }
 
     #[test]
@@ -236,13 +238,13 @@ mod tests {
 
     #[test]
     fn readfile_tool_uses_expanded_defaults() {
-        let _guard = env_lock().lock().unwrap();
-        remove_env_var("FC_RESULT_MAX_LINES");
-        remove_env_var("FC_READFILE_MAX_LINES");
-        remove_env_var("FC_LINE_MAX_CHARS");
-
         let tmp = TempDir::new().unwrap();
-        let executor = ToolExecutor::new(tmp.path());
+        let executor = executor_with_limits(
+            tmp.path(),
+            config::DEFAULT_FC_RESULT_MAX_LINES,
+            config::DEFAULT_FC_READFILE_MAX_LINES,
+            config::DEFAULT_FC_LINE_MAX_CHARS,
+        );
         let long_line = "a".repeat(400);
         let contents = (1..=410)
             .map(|_| long_line.clone())
@@ -261,13 +263,13 @@ mod tests {
 
     #[test]
     fn general_tools_use_shared_defaults() {
-        let _guard = env_lock().lock().unwrap();
-        remove_env_var("FC_RESULT_MAX_LINES");
-        remove_env_var("FC_READFILE_MAX_LINES");
-        remove_env_var("FC_LINE_MAX_CHARS");
-
         let tmp = TempDir::new().unwrap();
-        let executor = ToolExecutor::new(tmp.path());
+        let executor = executor_with_limits(
+            tmp.path(),
+            config::DEFAULT_FC_RESULT_MAX_LINES,
+            config::DEFAULT_FC_READFILE_MAX_LINES,
+            config::DEFAULT_FC_LINE_MAX_CHARS,
+        );
         for idx in 1..=90 {
             fs::write(tmp.path().join(format!("file_{idx:03}.txt")), "").unwrap();
         }
@@ -280,14 +282,14 @@ mod tests {
     }
 
     #[test]
-    fn fc_readfile_max_lines_affects_readfile_tool() {
-        let _guard = env_lock().lock().unwrap();
-        remove_env_var("FC_RESULT_MAX_LINES");
-        remove_env_var("FC_LINE_MAX_CHARS");
-        set_env_var("FC_READFILE_MAX_LINES", "120");
-
+    fn readfile_limit_affects_readfile_tool() {
         let tmp = TempDir::new().unwrap();
-        let executor = ToolExecutor::new(tmp.path());
+        let executor = executor_with_limits(
+            tmp.path(),
+            config::DEFAULT_FC_RESULT_MAX_LINES,
+            120,
+            config::DEFAULT_FC_LINE_MAX_CHARS,
+        );
         let contents = (1..=130)
             .map(|idx| format!("line-{idx}"))
             .collect::<Vec<_>>()
@@ -299,19 +301,17 @@ mod tests {
 
         assert!(tool_output.contains("120:line-120"));
         assert!(!tool_output.contains("121:line-121"));
-
-        remove_env_var("FC_READFILE_MAX_LINES");
     }
 
     #[test]
-    fn fc_result_max_lines_affects_general_tools() {
-        let _guard = env_lock().lock().unwrap();
-        set_env_var("FC_RESULT_MAX_LINES", "10");
-        remove_env_var("FC_READFILE_MAX_LINES");
-        remove_env_var("FC_LINE_MAX_CHARS");
-
+    fn general_result_limit_affects_general_tools() {
         let tmp = TempDir::new().unwrap();
-        let executor = ToolExecutor::new(tmp.path());
+        let executor = executor_with_limits(
+            tmp.path(),
+            10,
+            config::DEFAULT_FC_READFILE_MAX_LINES,
+            config::DEFAULT_FC_LINE_MAX_CHARS,
+        );
         for idx in 1..=20 {
             fs::write(tmp.path().join(format!("file_{idx:03}.txt")), "").unwrap();
         }
@@ -320,7 +320,22 @@ mod tests {
 
         assert!(tool_output.contains("file_010.txt"));
         assert!(!tool_output.contains("file_011.txt"));
+    }
 
-        remove_env_var("FC_RESULT_MAX_LINES");
+    #[test]
+    fn truncation_counts_unicode_characters() {
+        let tmp = TempDir::new().unwrap();
+        let executor = executor_with_limits(
+            tmp.path(),
+            config::DEFAULT_FC_RESULT_MAX_LINES,
+            config::DEFAULT_FC_READFILE_MAX_LINES,
+            20,
+        );
+        let input = "界".repeat(21);
+
+        let output = executor.truncate_text(&input, TruncationProfile::General);
+
+        assert_eq!(output, "界".repeat(20));
+        assert_eq!(output.chars().count(), 20);
     }
 }

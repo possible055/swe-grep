@@ -1,6 +1,7 @@
 use crate::protobuf::{connect_frame_encode, gzip_compress, gzip_decompress};
 use reqwest::header::{CONTENT_ENCODING, HeaderMap, HeaderName, HeaderValue};
 use serde_json::{Value, json};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -33,6 +34,31 @@ fn classify_reqwest_error(err: reqwest::Error) -> FastContextError {
     FastContextError::new(message, "NETWORK_ERROR", Value::Null)
 }
 
+fn http_client(allow_invalid_certs: bool) -> Result<&'static reqwest::Client, FastContextError> {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    static INSECURE_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+    let slot = if allow_invalid_certs {
+        &INSECURE_CLIENT
+    } else {
+        &CLIENT
+    };
+
+    if let Some(client) = slot.get() {
+        return Ok(client);
+    }
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(allow_invalid_certs)
+        .build()
+        .map_err(classify_reqwest_error)?;
+
+    let _ = slot.set(client);
+    slot.get().ok_or_else(|| {
+        FastContextError::new("Failed to init HTTP client", "NETWORK_ERROR", Value::Null)
+    })
+}
+
 async fn send_post(
     url: &str,
     body: Vec<u8>,
@@ -40,10 +66,7 @@ async fn send_post(
     timeout: Duration,
     allow_invalid_certs: bool,
 ) -> Result<(Vec<u8>, Option<String>), FastContextError> {
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(allow_invalid_certs)
-        .build()
-        .map_err(classify_reqwest_error)?;
+    let client = http_client(allow_invalid_certs)?;
 
     let response = client
         .post(url)
@@ -209,5 +232,15 @@ mod tests {
             b"proto-response"
         );
         assert_eq!(decode_unary_response(&data, None), b"proto-response");
+    }
+
+    #[test]
+    fn http_client_is_reused_per_certificate_policy() {
+        let secure = http_client(false).unwrap();
+        let insecure = http_client(true).unwrap();
+
+        assert!(std::ptr::eq(secure, http_client(false).unwrap()));
+        assert!(std::ptr::eq(insecure, http_client(true).unwrap()));
+        assert!(!std::ptr::eq(secure, insecure));
     }
 }

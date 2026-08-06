@@ -9,9 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::credentials;
 use super::http::unary_request;
-use super::{
-    AUTH_BASE, AuthCheck, DEFAULT_WS_APP_VER, DEFAULT_WS_LS_VER, FastContextError, WS_APP,
-};
+use super::{AUTH_BASE, AuthCheck, FastContextError, WS_APP};
 
 pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<String, String> {
     if let Some(api_key) = api_key {
@@ -60,19 +58,12 @@ pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<Strin
     ))
 }
 
-fn protocol_setting(value: Option<&str>, env_name: &str, default: &str) -> String {
-    value
-        .map(ToOwned::to_owned)
-        .or_else(|| env::var(env_name).ok())
-        .unwrap_or_else(|| default.to_string())
-}
-
 pub(super) fn ws_app_version(value: Option<&str>) -> String {
-    protocol_setting(value, "WS_APP_VER", DEFAULT_WS_APP_VER)
+    crate::config::ws_app_version(value)
 }
 
 pub(super) fn ws_ls_version(value: Option<&str>) -> String {
-    protocol_setting(value, "WS_LS_VER", DEFAULT_WS_LS_VER)
+    crate::config::ws_ls_version(value)
 }
 
 pub fn check_auth(

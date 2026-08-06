@@ -1,0 +1,52 @@
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "x86_64-pc-windows-msvc",
+]
+
+[advisories]
+db-urls = ["https://github.com/RustSec/advisory-db"]
+yanked = "deny"
+unmaintained = "workspace"
+unsound = "all"
+ignore = []
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+highlight = "all"
+
+deny = [
+    { crate = "native-tls", reason = "TLS should stay on rustls unless intentionally reviewed" },
+    { crate = "openssl", reason = "TLS should stay on rustls unless intentionally reviewed" },
+    { crate = "openssl-sys", reason = "TLS should stay on rustls unless intentionally reviewed" },
+]
+
+skip = [
+    { crate = "getrandom@0.2.17", reason = "pulled by ring through rustls" },
+    { crate = "getrandom@0.4.2", reason = "pulled by uuid and dev-only tempfile" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

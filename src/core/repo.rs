@@ -2,7 +2,7 @@ use crate::executor::ToolExecutor;
 use crate::path_filter::PathFilterConfig;
 use regex::Regex;
 use std::ffi::OsStr;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use super::{FileEntry, MAX_TREE_BYTES, SearchResult};
 
@@ -104,31 +104,36 @@ fn visible_entries(
     dir_path: &Path,
     executor: &ToolExecutor,
 ) -> std::io::Result<Vec<std::path::PathBuf>> {
-    let mut paths = std::fs::read_dir(dir_path)?
+    let mut entries: Vec<(PathBuf, bool)> = std::fs::read_dir(dir_path)?
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| executor.path_visible(path, path.is_dir()))
-        .collect::<Vec<_>>();
-    paths.sort_by(|a, b| compare_scope_paths(a, b));
-    Ok(paths)
-}
-
-fn compare_scope_paths(a: &Path, b: &Path) -> std::cmp::Ordering {
-    let a_is_file = !a.is_dir();
-    let b_is_file = !b.is_dir();
-    a_is_file.cmp(&b_is_file).then_with(|| {
-        let a_name = a
-            .file_name()
-            .and_then(OsStr::to_str)
-            .unwrap_or_default()
-            .to_lowercase();
-        let b_name = b
-            .file_name()
-            .and_then(OsStr::to_str)
-            .unwrap_or_default()
-            .to_lowercase();
-        a_name.cmp(&b_name)
-    })
+        .filter_map(|entry| {
+            let path = entry.path();
+            let is_dir = path.is_dir();
+            if executor.path_visible(&path, is_dir) {
+                Some((path, is_dir))
+            } else {
+                None
+            }
+        })
+        .collect();
+    entries.sort_by(|(a_path, a_is_dir), (b_path, b_is_dir)| {
+        let a_is_file = !*a_is_dir;
+        let b_is_file = !*b_is_dir;
+        a_is_file.cmp(&b_is_file).then_with(|| {
+            let a_name = a_path
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or_default()
+                .to_lowercase();
+            let b_name = b_path
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or_default()
+                .to_lowercase();
+            a_name.cmp(&b_name)
+        })
+    });
+    Ok(entries.into_iter().map(|(path, _)| path).collect())
 }
 
 fn manifest_line(project_root: &Path, path: &Path, is_dir: bool) -> String {
@@ -422,5 +427,25 @@ mod tests {
         assert!(lines.contains(&"pkg/"));
         assert!(lines.contains(&"pkg/visible.rs"));
         assert!(!lines.contains(&"pkg/hidden.txt"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn get_repo_map_applies_directory_ignore_rules_to_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        let external = tmp.path().join("external");
+        fs::create_dir(&project).unwrap();
+        fs::create_dir(&external).unwrap();
+        fs::write(external.join("secret.txt"), "secret").unwrap();
+        fs::write(project.join(".gitignore"), "linked/\n").unwrap();
+        symlink(&external, project.join("linked")).unwrap();
+
+        let result = get_repo_map(&project, 2, &PathFilterConfig::default());
+
+        assert!(!result.tree.contains("linked"));
+        assert!(!result.tree.contains("secret.txt"));
     }
 }

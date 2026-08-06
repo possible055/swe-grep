@@ -252,10 +252,19 @@ fn matches_ignore(matcher: &Gitignore, path: &Path, is_dir: bool) -> bool {
 
 fn has_dot_component(path: &Path) -> bool {
     path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|part| part.starts_with('.') && part != "." && part != "..")
+        let os = component.as_os_str();
+        if os == "." || os == ".." {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            os.as_bytes().first() == Some(&b'.')
+        }
+        #[cfg(not(unix))]
+        {
+            os.to_string_lossy().starts_with('.')
+        }
     })
 }
 
@@ -388,5 +397,16 @@ mod tests {
         let filter = PathFilter::new(tmp.path(), config);
 
         assert!(!filter.warnings().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dot_component_detects_non_utf8_hidden_names() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let hidden = PathBuf::from(OsString::from_vec(vec![b'.', 0xff]));
+
+        assert!(has_dot_component(&hidden));
     }
 }

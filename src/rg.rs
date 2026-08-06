@@ -3,8 +3,6 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-const RG_PATH_ENV: &str = "SWEGREP_RG_PATH";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RgResolutionError {
     EnvPathNotFound(PathBuf),
@@ -26,7 +24,7 @@ impl fmt::Display for RgResolutionError {
 
 pub(crate) fn resolve_rg_path() -> Result<PathBuf, RgResolutionError> {
     resolve_rg_path_from(
-        env::var_os(RG_PATH_ENV),
+        crate::config::swegrep_rg_path().map(PathBuf::into_os_string),
         env::current_exe().ok(),
         env::var_os("PATH"),
     )

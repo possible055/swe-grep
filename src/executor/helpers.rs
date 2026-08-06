@@ -1,20 +1,7 @@
 use globset::Glob;
 use std::cmp::Ordering;
-use std::env;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
-
-pub(super) fn bounded_int(value: Option<usize>, default: usize, min: usize, max: usize) -> usize {
-    value.unwrap_or(default).clamp(min, max)
-}
-
-pub(super) fn read_int_env(name: &str, default: usize, min: usize, max: usize) -> usize {
-    env::var(name)
-        .ok()
-        .and_then(|raw| raw.parse::<usize>().ok())
-        .map(|value| value.clamp(min, max))
-        .unwrap_or(default)
-}
 
 pub(super) fn normalize_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();

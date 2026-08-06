@@ -1,0 +1,75 @@
+name: Security
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - "supply-chain/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/security.yml"
+      - ".pre-commit-config.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - "supply-chain/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/security.yml"
+      - ".pre-commit-config.yaml"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_AUDIT_VERSION: 0.22.2
+  CARGO_DENY_VERSION: 0.19.9
+  CARGO_VET_VERSION: 0.10.2
+
+jobs:
+  dependencies:
+    name: Audit dependencies
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Cache cargo binaries
+        id: cargo-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: cargo-audit-${{ env.CARGO_AUDIT_VERSION }}-deny-${{ env.CARGO_DENY_VERSION }}-vet-${{ env.CARGO_VET_VERSION }}
+
+      - name: Install cargo-audit
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-audit --version "$CARGO_AUDIT_VERSION"
+
+      - name: Check RustSec advisories
+        run: cargo audit --deny warnings
+
+      - name: Install cargo-deny
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-deny --version "$CARGO_DENY_VERSION"
+
+      - name: Check dependency policy
+        run: cargo deny check
+
+      - name: Install cargo-vet
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-vet --version "$CARGO_VET_VERSION"
+
+      # Exact-version exemptions are a bootstrap baseline, not independent audits.
+      - name: Check dependency vetting baseline
+        run: cargo vet --locked

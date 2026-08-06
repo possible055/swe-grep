@@ -8,6 +8,7 @@ mod repo;
 mod search;
 mod types;
 
+pub use crate::config::{DEFAULT_WS_APP_VER, DEFAULT_WS_LS_VER};
 pub use auth::{check_auth, fetch_jwt, get_api_key, get_cached_jwt, get_jwt_exp};
 pub use credentials::{
     ExtractKeyResult, classify_api_key, discover_api_key, extract_key, get_config_path,
@@ -28,6 +29,4 @@ pub const API_BASE: &str =
     "https://server.self-serve.windsurf.com/exa.api_server_pb.ApiServerService";
 pub const AUTH_BASE: &str = "https://server.self-serve.windsurf.com/exa.auth_pb.AuthService";
 pub const WS_APP: &str = "windsurf";
-pub const DEFAULT_WS_APP_VER: &str = "1.48.2";
-pub const DEFAULT_WS_LS_VER: &str = "1.9544.35";
 pub const MAX_TREE_BYTES: usize = 32 * 1024;

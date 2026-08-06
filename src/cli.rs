@@ -1,3 +1,4 @@
+use crate::config;
 use crate::core::{
     SearchOptions, extract_key, format_search_success, mask_api_key, save_cached_api_key, search,
 };
@@ -14,10 +15,6 @@ const ENV_FILE_NAME: &str = ".env";
 const INCLUDE_FILE_NAME: &str = "include.txt";
 const EXCLUDE_FILE_NAME: &str = "exclude.txt";
 const SKILL_FILE_NAME: &str = "SKILL.md";
-const SCOPE_SNAPSHOT_TREE_DEPTH_ENV: &str = "SCOPE_SNAPSHOT_TREE_DEPTH";
-const FC_MAX_TURNS_ENV: &str = "FC_MAX_TURNS";
-const FC_MAX_COMMANDS_ENV: &str = "FC_MAX_COMMANDS";
-const FC_TIMEOUT_MS_ENV: &str = "FC_TIMEOUT_MS";
 
 #[derive(Debug, Parser)]
 #[command(name = "swe-grep", version)]
@@ -71,21 +68,21 @@ struct ExtractKeyArgs {
 
 pub fn run() -> i32 {
     load_skill_env();
-    let default_turns = read_env_range(FC_MAX_TURNS_ENV, 4, 4..=6);
-    let scope_snapshot_tree_depth = read_env_range(SCOPE_SNAPSHOT_TREE_DEPTH_ENV, 4, 0..=8);
-    let max_commands = read_env_range(FC_MAX_COMMANDS_ENV, 8, 1..=8);
-    let timeout_ms = read_timeout_ms_env();
-
     let cli = Cli::parse();
     match cli.command {
         Commands::ExtractKey(args) => run_extract_key(args),
-        Commands::Search(args) => run_search(
-            args,
-            default_turns,
-            scope_snapshot_tree_depth,
-            max_commands,
-            timeout_ms,
-        ),
+        Commands::Search(args) => {
+            for warning in config::invalid_env_warnings() {
+                eprintln!("Config warning: {warning}");
+            }
+            run_search(
+                args,
+                config::fc_max_turns(),
+                config::scope_snapshot_tree_depth(),
+                config::fc_max_commands(),
+                config::fc_timeout_ms(),
+            )
+        }
     }
 }
 
@@ -146,65 +143,14 @@ fn packaged_skill_dir_from(current_exe: Option<&Path>) -> Option<PathBuf> {
 }
 
 fn set_env_var(key: &str, value: &str) {
-    // SAFETY: this CLI loads its .env file before creating the Tokio runtime or spawning threads.
+    // SAFETY: CLI loads .env before Tokio runtime.
     unsafe {
         env::set_var(key, value);
     }
 }
 
-fn read_env_range(name: &str, default: usize, range: std::ops::RangeInclusive<usize>) -> usize {
-    read_env_range_value(name, range).unwrap_or(default)
-}
-
-fn read_env_range_value(name: &str, range: std::ops::RangeInclusive<usize>) -> Option<usize> {
-    env::var(name)
-        .ok()
-        .and_then(|raw| parse_env_range_value(&raw, range))
-}
-
-fn parse_env_range_value(raw: &str, range: std::ops::RangeInclusive<usize>) -> Option<usize> {
-    raw.parse::<usize>()
-        .ok()
-        .filter(|value| range.contains(value))
-}
-
-fn read_timeout_ms_env() -> u64 {
-    read_env_u64_range(FC_TIMEOUT_MS_ENV, 1_000..=300_000).unwrap_or(30_000)
-}
-
-fn read_env_u64_range(name: &str, range: std::ops::RangeInclusive<u64>) -> Option<u64> {
-    env::var(name)
-        .ok()
-        .and_then(|raw| parse_env_u64_range_value(&raw, range))
-}
-
-fn parse_env_u64_range_value(raw: &str, range: std::ops::RangeInclusive<u64>) -> Option<u64> {
-    raw.parse::<u64>()
-        .ok()
-        .filter(|value| range.contains(value))
-}
-
 fn parse_turns(value: &str) -> Result<usize, String> {
-    parse_range(value, 4..=6, "turns")
-}
-
-fn parse_range(
-    value: &str,
-    range: std::ops::RangeInclusive<usize>,
-    label: &str,
-) -> Result<usize, String> {
-    let parsed = value
-        .parse::<usize>()
-        .map_err(|_| format!("{label} must be an integer"))?;
-    if range.contains(&parsed) {
-        Ok(parsed)
-    } else {
-        Err(format!(
-            "{label} must be between {} and {}",
-            range.start(),
-            range.end()
-        ))
-    }
+    config::parse_range(value, config::FC_MAX_TURNS_RANGE, "turns")
 }
 
 fn run_extract_key(args: ExtractKeyArgs) -> i32 {
@@ -310,18 +256,12 @@ fn run_search(
 }
 
 fn read_path_filter_config() -> PathFilterConfig {
-    let path_filter_enabled = read_bool_env("SWEGREP_PATH_FILTER");
+    let path_filter_enabled = config::swegrep_path_filter_enabled();
     if path_filter_enabled == Some(false) {
         return PathFilterConfig::disabled();
     }
 
     let mut warnings = Vec::new();
-    if env::var("SWEGREP_PATH_FILTER").is_ok() && path_filter_enabled.is_none() {
-        warnings.push(
-            "Invalid SWEGREP_PATH_FILTER value; expected 1/0, true/false, yes/no, or on/off"
-                .to_string(),
-        );
-    }
     let include_patterns =
         read_filter_patterns_from_packaged_config(INCLUDE_FILE_NAME, &mut warnings);
     let exclude_patterns =
@@ -332,15 +272,6 @@ fn read_path_filter_config() -> PathFilterConfig {
         include_patterns,
         exclude_patterns,
         warnings,
-    }
-}
-
-fn read_bool_env(name: &str) -> Option<bool> {
-    let value = env::var(name).ok()?;
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
     }
 }
 
@@ -385,6 +316,7 @@ fn absolute_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{parse_env_range_value, parse_env_u64_range_value};
     use tempfile::TempDir;
 
     #[test]
