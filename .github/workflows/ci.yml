@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Fetch locked dependencies
         run: cargo fetch --locked
@@ -39,7 +39,7 @@ jobs:
     runs-on: windows-2025
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download ripgrep
         shell: pwsh
