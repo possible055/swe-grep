@@ -11,8 +11,14 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+type CommandOutput = (Value, ToolExecutionStatus, String, u128);
+
 impl ToolExecutor {
     pub fn exec_command(&self, cmd: &Value) -> String {
+        self.exec_command_until(cmd, None)
+    }
+
+    fn exec_command_until(&self, cmd: &Value, deadline: Option<Instant>) -> String {
         let Some(cmd) = cmd.as_object() else {
             return "Error: missing or invalid command".to_string();
         };
@@ -25,6 +31,7 @@ impl ToolExecutor {
                 cmd.get("path").and_then(Value::as_str).unwrap_or_default(),
                 string_array(cmd.get("include")).as_deref(),
                 string_array(cmd.get("exclude")).as_deref(),
+                deadline,
             ),
             "readfile" => self.execute_readfile(
                 cmd.get("file").and_then(Value::as_str).unwrap_or_default(),
@@ -34,12 +41,14 @@ impl ToolExecutor {
                 cmd.get("end_line")
                     .and_then(Value::as_u64)
                     .map(|value| value as usize),
+                deadline,
             ),
             "tree" => self.execute_tree(
                 cmd.get("path").and_then(Value::as_str).unwrap_or_default(),
                 cmd.get("levels")
                     .and_then(Value::as_u64)
                     .map(|value| value as usize),
+                deadline,
             ),
             "ls" => self.execute_ls(
                 cmd.get("path").and_then(Value::as_str).unwrap_or_default(),
@@ -47,6 +56,7 @@ impl ToolExecutor {
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
                 cmd.get("all").and_then(Value::as_bool).unwrap_or(false),
+                deadline,
             ),
             "glob" => self.execute_glob(
                 cmd.get("pattern")
@@ -56,6 +66,7 @@ impl ToolExecutor {
                 cmd.get("type_filter")
                     .and_then(Value::as_str)
                     .unwrap_or("file"),
+                deadline,
             ),
             _ => format!("Error: unknown command type '{command_type}'"),
         }
@@ -102,6 +113,8 @@ impl ToolExecutor {
         }
 
         let timeout = Duration::from_millis(timeout_budget_ms.min(u64::MAX as u128) as u64);
+        let started = Instant::now();
+        let deadline = started.checked_add(timeout).unwrap_or(started);
         let receivers = tool_calls
             .iter()
             .map(|call| {
@@ -115,9 +128,11 @@ impl ToolExecutor {
                 let (tx, rx) = mpsc::channel();
                 thread::spawn(move || {
                     let started = Instant::now();
-                    let output = executor.exec_command(&cmd);
+                    let output = executor.exec_command_until(&cmd, Some(deadline));
                     let duration_ms = started.elapsed().as_millis();
-                    let status = if output.trim_start().starts_with("Error:") {
+                    let status = if output == "Error: tool timed out" {
+                        ToolExecutionStatus::TimedOut
+                    } else if output.trim_start().starts_with("Error:") {
                         ToolExecutionStatus::Error
                     } else {
                         ToolExecutionStatus::Completed
@@ -128,24 +143,7 @@ impl ToolExecutor {
             })
             .collect::<Vec<_>>();
 
-        let outputs = receivers
-            .into_iter()
-            .map(|rx| match rx.recv_timeout(timeout) {
-                Ok(result) => result,
-                Err(mpsc::RecvTimeoutError::Timeout) => (
-                    Value::Null,
-                    ToolExecutionStatus::TimedOut,
-                    "Error: tool timed out".to_string(),
-                    timeout_budget_ms,
-                ),
-                Err(mpsc::RecvTimeoutError::Disconnected) => (
-                    Value::Null,
-                    ToolExecutionStatus::Error,
-                    "Error: command panicked".to_string(),
-                    0,
-                ),
-            })
-            .collect::<Vec<_>>();
+        let outputs = receive_outputs(receivers, deadline, timeout_budget_ms);
 
         let completed = tool_calls
             .iter()
@@ -165,6 +163,33 @@ impl ToolExecutor {
 
         pending.into_iter().chain(completed).collect()
     }
+}
+
+fn receive_outputs(
+    receivers: Vec<mpsc::Receiver<CommandOutput>>,
+    deadline: Instant,
+    timeout_budget_ms: u128,
+) -> Vec<CommandOutput> {
+    receivers
+        .into_iter()
+        .map(
+            |rx| match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(result) => result,
+                Err(mpsc::RecvTimeoutError::Timeout) => (
+                    Value::Null,
+                    ToolExecutionStatus::TimedOut,
+                    "Error: tool timed out".to_string(),
+                    timeout_budget_ms,
+                ),
+                Err(mpsc::RecvTimeoutError::Disconnected) => (
+                    Value::Null,
+                    ToolExecutionStatus::Error,
+                    "Error: command panicked".to_string(),
+                    0,
+                ),
+            },
+        )
+        .collect()
 }
 
 fn string_array(value: Option<&Value>) -> Option<Vec<String>> {

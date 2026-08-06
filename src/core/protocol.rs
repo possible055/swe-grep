@@ -428,7 +428,7 @@ pub fn get_tool_definitions(max_commands: usize) -> String {
                 "properties": {
                     "type": {"type": "string", "const": "ls", "description": "List files in a directory."},
                     "path": {"type": "string", "description": "Path to the directory to list."},
-                    "long_format": {"type": "boolean", "description": "Use long format."},
+                    "long_format": {"type": "boolean", "description": "Use tab-separated type, regular-file byte size, readonly, and name fields."},
                     "all": {"type": "boolean", "description": "Show all files, including hidden files."}
                 },
                 "required": ["type", "path"]

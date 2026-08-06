@@ -1,3 +1,4 @@
+use super::types::unique_patterns;
 use super::{SearchError, SearchMeta, SearchResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,7 +16,13 @@ pub fn format_search_output(result: &SearchResult) -> String {
 }
 
 pub fn format_search_success(result: &SearchResult) -> String {
-    let patterns = unique_patterns(&result.rg_patterns);
+    let patterns = unique_patterns(
+        result
+            .rg_patterns
+            .iter()
+            .filter(|pattern| pattern.len() >= 3)
+            .cloned(),
+    );
     if result.files.is_empty() && patterns.is_empty() {
         return format_no_relevant_files(result.raw_response.as_deref());
     }
@@ -113,16 +120,6 @@ fn format_no_relevant_files(raw_response: Option<&str>) -> String {
         Some(raw_response) => format!("No relevant files found.\n\nRaw response:\n{raw_response}"),
         None => "No relevant files found.".to_string(),
     }
-}
-
-fn unique_patterns(patterns: &[String]) -> Vec<String> {
-    let mut unique = Vec::new();
-    for pattern in patterns {
-        if pattern.len() >= 3 && !unique.contains(pattern) {
-            unique.push(pattern.clone());
-        }
-    }
-    unique
 }
 
 #[cfg(test)]

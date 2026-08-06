@@ -136,6 +136,10 @@ Filter files are loaded from the shared runtime directory:
 
 Disable path filtering: `export SWEGREP_PATH_FILTER=0`
 
+When disabled, swe-grep does not apply `exclude.txt`, `include.txt`, `.gitignore`, or the default hidden-path filter. Explicit filters supplied by a tool call still apply, and `ls` continues to hide dot-paths unless its `all` option is enabled.
+
+Local tool directory output is deterministic: directories are listed before other entries, then names are sorted case-insensitively with the original name as the tie-breaker. `ls` long-format rows are tab-separated `type`, regular-file byte size (`-` otherwise), `readonly`, and `name` fields.
+
 ### Environment Variables
 
 The CLI loads `.env` from the shared runtime directory at startup. All packaged values are commented out by default.
@@ -172,7 +176,10 @@ Development checks:
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+cargo bench --bench local_tools
 ```
+
+The benchmark reports warm-cache p50/p95 latency and output size. Measure peak RSS externally when needed, for example with `/usr/bin/time -v cargo bench --bench local_tools` on Linux; benchmark results are not a CI gate.
 
 ## Acknowledgements
 

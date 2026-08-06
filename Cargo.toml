@@ -1,6 +1,6 @@
 [package]
 name = "swe-grep"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 rust-version = "1.96.0"
 description = "AI-powered Agentic Code Search CLI"
@@ -10,6 +10,10 @@ license = "MIT"
 [[bin]]
 name = "swe-grep"
 path = "src/main.rs"
+
+[[bench]]
+name = "local_tools"
+harness = false
 
 [dependencies]
 base64 = "0.22"

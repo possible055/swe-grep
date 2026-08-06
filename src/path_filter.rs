@@ -2,7 +2,7 @@ use ignore::Match;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct PathFilterConfig {
@@ -51,7 +51,7 @@ impl PathFilterConfig {
 pub struct PathFilter {
     enabled: bool,
     root: PathBuf,
-    gitignores: Mutex<HashMap<PathBuf, Gitignore>>,
+    gitignores: Mutex<HashMap<PathBuf, Arc<Gitignore>>>,
     include: Gitignore,
     exclude: Gitignore,
     include_patterns: Vec<String>,
@@ -64,7 +64,7 @@ impl PathFilter {
         let mut warnings = config.warnings;
 
         let gitignore = build_gitignore_file(&root, &mut warnings);
-        let gitignores = Mutex::new(HashMap::from([(root.clone(), gitignore)]));
+        let gitignores = Mutex::new(HashMap::from([(root.clone(), Arc::new(gitignore))]));
         let include = build_pattern_set(
             &root,
             "include.txt",
@@ -159,21 +159,18 @@ impl PathFilter {
         dirs
     }
 
-    fn gitignore_for_dir(&self, dir: &Path) -> Gitignore {
+    fn gitignore_for_dir(&self, dir: &Path) -> Arc<Gitignore> {
         if let Ok(cache) = self.gitignores.lock()
             && let Some(matcher) = cache.get(dir)
         {
             return matcher.clone();
         }
 
-        let matcher = build_gitignore_file_quiet(dir);
+        let matcher = Arc::new(build_gitignore_file_quiet(dir));
         let Ok(mut cache) = self.gitignores.lock() else {
             return matcher;
         };
-        cache
-            .entry(dir.to_path_buf())
-            .or_insert_with(|| matcher.clone())
-            .clone()
+        cache.entry(dir.to_path_buf()).or_insert(matcher).clone()
     }
 }
 

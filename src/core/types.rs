@@ -1,5 +1,6 @@
 use crate::path_filter::PathFilterConfig;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -88,6 +89,14 @@ impl SearchOptions {
             line_max_chars: None,
         }
     }
+}
+
+pub(super) fn unique_patterns(patterns: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    patterns
+        .into_iter()
+        .filter(|pattern| seen.insert(pattern.clone()))
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

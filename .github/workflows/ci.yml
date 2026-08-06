@@ -12,6 +12,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  RIPGREP_VERSION: 15.1.0
 
 jobs:
   rust:
@@ -29,6 +30,43 @@ jobs:
 
       - name: Lint
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+  windows-test:
+    name: Windows tests
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download ripgrep
+        shell: pwsh
+        run: |
+          $rgDir = "target\ripgrep"
+          $extractDir = "$rgDir\extract"
+          $asset = "ripgrep-${env:RIPGREP_VERSION}-x86_64-pc-windows-msvc.zip"
+          $baseUrl = "https://github.com/BurntSushi/ripgrep/releases/download/${env:RIPGREP_VERSION}"
+          New-Item -ItemType Directory -Force $extractDir | Out-Null
+          Invoke-WebRequest "$baseUrl/$asset" -OutFile $asset
+          Invoke-WebRequest "$baseUrl/$asset.sha256" -OutFile "$asset.sha256"
+          $digestMatch = [regex]::Match((Get-Content "$asset.sha256" -Raw), '[a-fA-F0-9]{64}')
+          if (-not $digestMatch.Success) {
+            throw "Could not find SHA256 digest in $asset.sha256"
+          }
+          $expected = $digestMatch.Value.ToLowerInvariant()
+          $actual = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Checksum mismatch for $asset"
+          }
+          Expand-Archive -Path $asset -DestinationPath $extractDir -Force
+          $rg = Get-ChildItem -Path $extractDir -Recurse -Filter rg.exe | Select-Object -First 1
+          if (-not $rg) {
+            throw "rg.exe not found in $asset"
+          }
+          Copy-Item $rg.FullName "$rgDir\rg.exe"
+          (Resolve-Path $rgDir).Path | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Test
         run: cargo test --locked

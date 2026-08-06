@@ -1,8 +1,9 @@
-use crate::executor::ToolExecutor;
+use crate::executor::{ToolExecutor, VisibleEntry};
 use crate::path_filter::PathFilterConfig;
 use regex::Regex;
-use std::ffi::OsStr;
-use std::path::{Component, Path, PathBuf};
+use std::fs::File;
+use std::io::Read;
+use std::path::{Component, Path};
 
 use super::{FileEntry, MAX_TREE_BYTES, SearchResult};
 
@@ -21,119 +22,132 @@ pub fn get_repo_map(
 ) -> RepoMap {
     let executor =
         ToolExecutor::with_limits_and_filter(project_root, None, None, path_filter_config.clone());
-    for depth in (1..=target_depth).rev() {
-        let Ok(tree) = build_scope_manifest(project_root, &executor, depth) else {
-            break;
-        };
-        let size_bytes = tree.len();
-        if size_bytes <= MAX_TREE_BYTES {
-            return RepoMap {
-                tree,
-                depth,
-                size_bytes,
-                fell_back: depth < target_depth,
-            };
+    get_repo_map_with_executor(project_root, target_depth, &executor)
+}
+
+pub(crate) fn get_repo_map_with_executor(
+    project_root: &Path,
+    target_depth: usize,
+    executor: &ToolExecutor,
+) -> RepoMap {
+    let entries = match executor.visible_entries(project_root) {
+        Ok(entries) => entries,
+        Err(_) => return inaccessible_repo_map(),
+    };
+    if target_depth == 0 || manifest_size(project_root, &entries) > MAX_TREE_BYTES {
+        return root_fallback(project_root, entries);
+    }
+
+    let mut nodes = entries
+        .into_iter()
+        .map(ManifestNode::new)
+        .collect::<Vec<_>>();
+    let mut best_tree = render_manifest(project_root, &nodes);
+    let mut best_depth = 1;
+    let mut current_size = best_tree.len();
+
+    for depth in 2..=target_depth {
+        match expand_manifest_depth(
+            &mut nodes,
+            1,
+            depth - 1,
+            project_root,
+            executor,
+            &mut current_size,
+        ) {
+            Ok(true) => {
+                best_tree = render_manifest(project_root, &nodes);
+                best_depth = depth;
+            }
+            Ok(false) | Err(_) => break,
         }
     }
 
-    match visible_entries(project_root, &executor) {
-        Ok(entries) => {
-            let tree = capped_root_manifest(project_root, entries);
-            RepoMap {
-                size_bytes: tree.len(),
-                tree,
-                depth: 0,
-                fell_back: true,
-            }
-        }
-        Err(_) => {
-            let tree = "/codebase\n(empty or inaccessible)".to_string();
-            RepoMap {
-                size_bytes: tree.len(),
-                tree,
-                depth: 0,
-                fell_back: true,
-            }
+    RepoMap {
+        size_bytes: best_tree.len(),
+        tree: best_tree,
+        depth: best_depth,
+        fell_back: best_depth < target_depth,
+    }
+}
+
+#[derive(Debug)]
+struct ManifestNode {
+    entry: VisibleEntry,
+    children: Vec<ManifestNode>,
+}
+
+impl ManifestNode {
+    fn new(entry: VisibleEntry) -> Self {
+        Self {
+            entry,
+            children: Vec::new(),
         }
     }
 }
 
-fn build_scope_manifest(
-    project_root: &Path,
-    executor: &ToolExecutor,
-    max_depth: usize,
-) -> std::io::Result<String> {
-    let mut lines = vec!["/codebase".to_string()];
-    let entries = visible_entries(project_root, executor)?;
-    append_scope_manifest_entries(&mut lines, project_root, executor, max_depth, 1, entries);
-    Ok(lines.join("\n"))
-}
-
-fn append_scope_manifest_entries(
-    lines: &mut Vec<String>,
-    project_root: &Path,
-    executor: &ToolExecutor,
-    max_depth: usize,
+fn expand_manifest_depth(
+    nodes: &mut [ManifestNode],
     current_depth: usize,
-    entries: Vec<std::path::PathBuf>,
-) {
-    if current_depth > max_depth {
-        return;
-    }
-
-    for path in entries {
-        let is_dir = path.is_dir();
-        lines.push(manifest_line(project_root, &path, is_dir));
-        if is_dir && current_depth < max_depth {
-            let Ok(entries) = visible_entries(&path, executor) else {
+    parent_depth: usize,
+    project_root: &Path,
+    executor: &ToolExecutor,
+    size_bytes: &mut usize,
+) -> std::io::Result<bool> {
+    for node in nodes {
+        if current_depth == parent_depth {
+            if !node.entry.is_dir() {
                 continue;
-            };
-            append_scope_manifest_entries(
-                lines,
-                project_root,
-                executor,
-                max_depth,
-                current_depth + 1,
-                entries,
-            );
+            }
+            let entries = executor.visible_entries(&node.entry.path)?;
+            let mut children = Vec::with_capacity(entries.len());
+            for entry in entries {
+                *size_bytes = size_bytes
+                    .saturating_add(1)
+                    .saturating_add(manifest_line(project_root, &entry.path, entry.is_dir()).len());
+                if *size_bytes > MAX_TREE_BYTES {
+                    return Ok(false);
+                }
+                children.push(ManifestNode::new(entry));
+            }
+            node.children = children;
+        } else if !expand_manifest_depth(
+            &mut node.children,
+            current_depth + 1,
+            parent_depth,
+            project_root,
+            executor,
+            size_bytes,
+        )? {
+            return Ok(false);
         }
     }
+    Ok(true)
 }
 
-fn visible_entries(
-    dir_path: &Path,
-    executor: &ToolExecutor,
-) -> std::io::Result<Vec<std::path::PathBuf>> {
-    let mut entries: Vec<(PathBuf, bool)> = std::fs::read_dir(dir_path)?
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            let is_dir = path.is_dir();
-            if executor.path_visible(&path, is_dir) {
-                Some((path, is_dir))
-            } else {
-                None
-            }
-        })
-        .collect();
-    entries.sort_by(|(a_path, a_is_dir), (b_path, b_is_dir)| {
-        let a_is_file = !*a_is_dir;
-        let b_is_file = !*b_is_dir;
-        a_is_file.cmp(&b_is_file).then_with(|| {
-            let a_name = a_path
-                .file_name()
-                .and_then(OsStr::to_str)
-                .unwrap_or_default()
-                .to_lowercase();
-            let b_name = b_path
-                .file_name()
-                .and_then(OsStr::to_str)
-                .unwrap_or_default()
-                .to_lowercase();
-            a_name.cmp(&b_name)
-        })
-    });
-    Ok(entries.into_iter().map(|(path, _)| path).collect())
+fn manifest_size(project_root: &Path, entries: &[VisibleEntry]) -> usize {
+    entries.iter().fold("/codebase".len(), |size, entry| {
+        size.saturating_add(1)
+            .saturating_add(manifest_line(project_root, &entry.path, entry.is_dir()).len())
+    })
+}
+
+fn render_manifest(project_root: &Path, nodes: &[ManifestNode]) -> String {
+    let mut tree = String::from("/codebase");
+    append_manifest_nodes(&mut tree, project_root, nodes);
+    tree
+}
+
+fn append_manifest_nodes(tree: &mut String, project_root: &Path, nodes: &[ManifestNode]) {
+    for node in nodes {
+        tree.push('\n');
+        tree.push_str(&manifest_line(
+            project_root,
+            &node.entry.path,
+            node.entry.is_dir(),
+        ));
+        append_manifest_nodes(tree, project_root, &node.children);
+    }
 }
 
 fn manifest_line(project_root: &Path, path: &Path, is_dir: bool) -> String {
@@ -148,13 +162,36 @@ fn manifest_line(project_root: &Path, path: &Path, is_dir: bool) -> String {
     rel
 }
 
-fn capped_root_manifest(project_root: &Path, entries: Vec<std::path::PathBuf>) -> String {
+fn root_fallback(project_root: &Path, entries: Vec<VisibleEntry>) -> RepoMap {
+    let tree = capped_root_manifest(project_root, entries);
+    RepoMap {
+        size_bytes: tree.len(),
+        tree,
+        depth: 0,
+        fell_back: true,
+    }
+}
+
+fn inaccessible_repo_map() -> RepoMap {
+    let tree = "/codebase\n(empty or inaccessible)".to_string();
+    RepoMap {
+        size_bytes: tree.len(),
+        tree,
+        depth: 0,
+        fell_back: true,
+    }
+}
+
+fn capped_root_manifest(project_root: &Path, entries: Vec<VisibleEntry>) -> String {
     let suffix = "... (scope snapshot truncated) ...";
     let mut tree = String::from("/codebase");
     let mut truncated = false;
 
-    for path in entries {
-        let line = format!("\n{}", manifest_line(project_root, &path, path.is_dir()));
+    for entry in entries {
+        let line = format!(
+            "\n{}",
+            manifest_line(project_root, &entry.path, entry.is_dir())
+        );
         let suffix_len = if truncated { 0 } else { suffix.len() + 1 };
         if tree.len() + line.len() + suffix_len > MAX_TREE_BYTES {
             truncated = true;
@@ -234,12 +271,22 @@ fn parse_answer_file(
 }
 
 fn file_line_count(path: &Path) -> std::io::Result<usize> {
-    let content = std::fs::read(path)?;
-    if content.is_empty() {
-        return Ok(0);
+    let mut file = File::open(path)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut newline_count = 0_usize;
+    let mut last_byte = None;
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        newline_count += buffer[..read].iter().filter(|byte| **byte == b'\n').count();
+        last_byte = Some(buffer[read - 1]);
     }
-    let newline_count = content.iter().filter(|byte| **byte == b'\n').count();
-    if content.last() == Some(&b'\n') {
+    let Some(last_byte) = last_byte else {
+        return Ok(0);
+    };
+    if last_byte == b'\n' {
         Ok(newline_count)
     } else {
         Ok(newline_count + 1)
@@ -394,6 +441,50 @@ mod tests {
         assert!(result.fell_back);
         assert!(result.tree.starts_with("/codebase"));
         assert!(result.tree.lines().any(|line| line == "src/"));
+    }
+
+    #[test]
+    fn get_repo_map_keeps_the_last_complete_depth() {
+        let tmp = TempDir::new().unwrap();
+        let nested = tmp.path().join("src");
+        fs::create_dir(&nested).unwrap();
+        for index in 0..1_000 {
+            fs::write(
+                nested.join(format!("long_nested_file_name_{index:04}.rs")),
+                "",
+            )
+            .unwrap();
+        }
+
+        let result = get_repo_map(tmp.path(), 4, &PathFilterConfig::default());
+
+        assert_eq!(result.depth, 1);
+        assert!(result.fell_back);
+        assert!(result.tree.lines().any(|line| line == "src/"));
+        assert!(!result.tree.contains("long_nested_file_name"));
+        assert!(result.size_bytes <= MAX_TREE_BYTES);
+    }
+
+    #[test]
+    fn get_repo_map_uses_the_shared_directory_order() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir(tmp.path().join("zulu-dir")).unwrap();
+        fs::create_dir(tmp.path().join("Alpha-dir")).unwrap();
+        fs::write(tmp.path().join("zulu.txt"), "").unwrap();
+        fs::write(tmp.path().join("Alpha.txt"), "").unwrap();
+
+        let result = get_repo_map(tmp.path(), 1, &PathFilterConfig::default());
+
+        assert_eq!(
+            result.tree.lines().collect::<Vec<_>>(),
+            vec![
+                "/codebase",
+                "Alpha-dir/",
+                "zulu-dir/",
+                "Alpha.txt",
+                "zulu.txt"
+            ]
+        );
     }
 
     #[test]

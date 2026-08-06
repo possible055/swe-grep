@@ -4,9 +4,12 @@ use super::debug::{
 use super::restricted_exec::{
     format_restricted_exec_results, has_valid_restricted_exec_command, restricted_exec_commands,
 };
-use crate::executor::{InstantContextToolCall as ExecutorToolCall, ToolExecutor};
+use crate::executor::{
+    InstantContextTiming as ExecutorTiming, InstantContextToolCall as ExecutorToolCall,
+    InstantContextToolUpdate as ExecutorToolUpdate, ToolExecutionStatus as ExecutorStatus,
+    ToolExecutor,
+};
 use serde_json::Value;
-use std::collections::HashSet;
 use std::future::Future;
 
 use super::super::auth::{get_api_key, get_cached_jwt};
@@ -16,8 +19,8 @@ use super::super::protocol::{
     ChatMessage, FINAL_FORCE_ANSWER, MessageRole, ParsedModelTurn, build_request,
     build_system_prompt, get_tool_definitions, parse_response, trim_messages,
 };
-use super::super::repo::{RepoMap, get_repo_map, parse_answer};
-use super::super::types::{SearchError, SearchMeta, SearchOptions, SearchResult};
+use super::super::repo::{RepoMap, get_repo_map_with_executor, parse_answer};
+use super::super::types::{SearchError, SearchMeta, SearchOptions, SearchResult, unique_patterns};
 
 const MAX_COMPENSATED_TURNS: usize = 2;
 
@@ -32,6 +35,28 @@ impl InstantContextStep {
         let tool_calls = calls;
         Self { id, tool_calls }
     }
+}
+
+fn failed_tool_updates(step: &InstantContextStep, message: &str) -> Vec<ExecutorToolUpdate> {
+    let pending = step.tool_calls.iter().map(|call| ExecutorToolUpdate {
+        step_id: step.id.clone(),
+        tool_call_id: call.id.clone(),
+        tool_name: call.name.clone(),
+        command: call.args.clone(),
+        status: ExecutorStatus::Pending,
+        output: String::new(),
+        timing: ExecutorTiming::default(),
+    });
+    let terminal = step.tool_calls.iter().map(|call| ExecutorToolUpdate {
+        step_id: step.id.clone(),
+        tool_call_id: call.id.clone(),
+        tool_name: call.name.clone(),
+        command: Value::Null,
+        status: ExecutorStatus::Error,
+        output: format!("Error: {message}"),
+        timing: ExecutorTiming::default(),
+    });
+    pending.chain(terminal).collect()
 }
 
 pub async fn search(
@@ -129,7 +154,7 @@ where
     let system_prompt =
         build_system_prompt(options.max_turns, options.max_commands, options.max_results);
 
-    let repo_map = get_repo_map(&project_root, options.tree_depth, &options.path_filter);
+    let repo_map = get_repo_map_with_executor(&project_root, options.tree_depth, &executor);
     log(&format!(
         "Repo map: scope snapshot depth {} ({:.1}KB){}",
         repo_map.depth,
@@ -394,8 +419,24 @@ where
             step.tool_calls.len()
         ));
         let timeout_budget_ms = (timeout_ms as u128 / 2).max(1_000);
-        let updates =
-            executor.exec_restricted_exec_step(&step.id, &step.tool_calls, timeout_budget_ms);
+        let blocking_executor = executor.clone();
+        let blocking_step_id = step.id.clone();
+        let blocking_calls = step.tool_calls.clone();
+        let updates = match tokio::task::spawn_blocking(move || {
+            blocking_executor.exec_restricted_exec_step(
+                &blocking_step_id,
+                &blocking_calls,
+                timeout_budget_ms,
+            )
+        })
+        .await
+        {
+            Ok(updates) => updates,
+            Err(error) => {
+                log(&format!("Restricted exec worker failed: {error}"));
+                failed_tool_updates(&step, "restricted exec worker failed")
+            }
+        };
         let results = format_restricted_exec_results(&updates);
 
         messages.push(ChatMessage {
@@ -446,17 +487,6 @@ where
         ),
         ..SearchResult::default()
     }
-}
-
-fn unique_patterns(patterns: Vec<String>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut unique = Vec::new();
-    for pattern in patterns {
-        if seen.insert(pattern.clone()) {
-            unique.push(pattern);
-        }
-    }
-    unique
 }
 
 fn format_search_turn_status(used: usize, max_turns: usize) -> String {

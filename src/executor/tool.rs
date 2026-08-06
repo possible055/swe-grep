@@ -1,10 +1,11 @@
 use crate::config;
 use crate::path_filter::{PathFilter, PathFilterConfig};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::ffi::OsString;
+use std::fs::{self, FileType};
+use std::io;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
-
-use super::helpers::normalize_path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TruncationProfile {
@@ -13,9 +14,82 @@ pub(crate) enum TruncationProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct OutputLimits {
+pub(crate) struct OutputLimits {
+    pub(crate) max_lines: usize,
+    pub(crate) line_max_chars: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct VisibleEntry {
+    pub(crate) path: PathBuf,
+    pub(crate) name: OsString,
+    pub(crate) file_type: FileType,
+    sort_key: String,
+}
+
+impl VisibleEntry {
+    pub(crate) fn is_dir(&self) -> bool {
+        self.file_type.is_dir()
+    }
+
+    pub(crate) fn is_file(&self) -> bool {
+        self.file_type.is_file()
+    }
+
+    pub(crate) fn is_symlink(&self) -> bool {
+        self.file_type.is_symlink()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct BoundedText {
+    lines: Vec<String>,
     max_lines: usize,
     line_max_chars: usize,
+    truncated: bool,
+}
+
+impl BoundedText {
+    pub(crate) fn new(max_lines: usize, line_max_chars: usize) -> Self {
+        Self {
+            lines: Vec::with_capacity(max_lines),
+            max_lines,
+            line_max_chars,
+            truncated: false,
+        }
+    }
+
+    pub(crate) fn push_line(&mut self, line: &str) -> bool {
+        if self.lines.len() >= self.max_lines {
+            self.truncated = true;
+            return false;
+        }
+        self.lines.push(truncate_line(line, self.line_max_chars));
+        true
+    }
+
+    pub(crate) fn is_full(&self) -> bool {
+        self.lines.len() >= self.max_lines
+    }
+
+    pub(crate) fn mark_truncated(&mut self) {
+        self.truncated = true;
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    pub(crate) fn finish(self) -> String {
+        let mut result = self.lines.join("\n");
+        if self.truncated {
+            if !result.is_empty() {
+                result.push('\n');
+            }
+            result.push_str("... (lines truncated) ...");
+        }
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -140,7 +214,7 @@ impl ToolExecutor {
         remapped
     }
 
-    fn output_limits(&self, profile: TruncationProfile) -> OutputLimits {
+    pub(crate) fn output_limits(&self, profile: TruncationProfile) -> OutputLimits {
         match profile {
             TruncationProfile::General => OutputLimits {
                 max_lines: self.general_result_max_lines,
@@ -153,38 +227,85 @@ impl ToolExecutor {
         }
     }
 
-    pub(super) fn truncate_text(&self, text: &str, profile: TruncationProfile) -> String {
+    pub(crate) fn bounded_text(&self, profile: TruncationProfile) -> BoundedText {
         let limits = self.output_limits(profile);
-        self.truncate_with_limits(text, limits.max_lines, limits.line_max_chars)
-    }
-
-    fn truncate_with_limits(&self, text: &str, max_lines: usize, line_max_chars: usize) -> String {
-        let lines: Vec<&str> = text.split('\n').collect();
-        let limit = lines.len().min(max_lines);
-        let mut truncated = Vec::with_capacity(limit);
-
-        for line in lines.iter().take(limit) {
-            if line.chars().count() > line_max_chars {
-                truncated.push(line.chars().take(line_max_chars).collect());
-            } else {
-                truncated.push((*line).to_string());
-            }
-        }
-
-        let mut result = truncated.join("\n");
-        if lines.len() > max_lines {
-            result.push_str("\n... (lines truncated) ...");
-        }
-        result
+        BoundedText::new(limits.max_lines, limits.line_max_chars)
     }
 
     pub(super) fn is_visible_path(&self, path: &Path, is_dir: bool) -> bool {
         self.path_filter.is_visible(path, is_dir)
     }
 
-    pub(crate) fn path_visible(&self, path: &Path, is_dir: bool) -> bool {
-        self.is_visible_path(path, is_dir)
+    pub(crate) fn visible_entries(&self, dir: &Path) -> io::Result<Vec<VisibleEntry>> {
+        let mut entries = Vec::new();
+        for result in fs::read_dir(dir)? {
+            let entry = result?;
+            let path = entry.path();
+            let file_type = entry.file_type()?;
+            let is_dir_for_filter = file_type.is_dir() || (file_type.is_symlink() && path.is_dir());
+            if !self.is_visible_path(&path, is_dir_for_filter) {
+                continue;
+            }
+            let name = entry.file_name();
+            let sort_key = name.to_string_lossy().to_lowercase();
+            entries.push(VisibleEntry {
+                path,
+                name,
+                file_type,
+                sort_key,
+            });
+        }
+        entries.sort_by(|a, b| {
+            (!a.is_dir())
+                .cmp(&(!b.is_dir()))
+                .then_with(|| a.sort_key.cmp(&b.sort_key))
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        Ok(entries)
     }
+
+    pub(crate) fn path_contains_symlink(&self, path: &Path) -> bool {
+        let Ok(relative) = path.strip_prefix(&self.root) else {
+            return false;
+        };
+        let mut current = self.root.clone();
+        for component in relative.components() {
+            current.push(component.as_os_str());
+            if current
+                .symlink_metadata()
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+            {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+fn truncate_line(line: &str, line_max_chars: usize) -> String {
+    if line.is_ascii() {
+        return line[..line.len().min(line_max_chars)].to_string();
+    }
+    match line.char_indices().nth(line_max_chars) {
+        Some((index, _)) => line[..index].to_string(),
+        None => line.to_string(),
+    }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
 }
 
 #[cfg(test)]
@@ -333,7 +454,11 @@ mod tests {
         );
         let input = "界".repeat(21);
 
-        let output = executor.truncate_text(&input, TruncationProfile::General);
+        let mut output = executor.bounded_text(TruncationProfile::General);
+        for line in input.split('\n') {
+            output.push_line(line);
+        }
+        let output = output.finish();
 
         assert_eq!(output, "界".repeat(20));
         assert_eq!(output.chars().count(), 20);

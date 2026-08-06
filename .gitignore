@@ -30,9 +30,8 @@ AGENTS.md
 CLAUDE.md
 
 # Project-specific
-.lock-index/
-.dev
-.repos
+local
+repos
 
 # Logs / Env
 *.log
