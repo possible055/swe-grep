@@ -41,10 +41,9 @@ pub async fn search_with_content(options: SearchOptions) -> String {
             ""
         };
         output.push_str(&format!(
-            "\n\n[config] tree_depth={}{}{}, tree_size={}KB, max_turns={max_turns}, max_results={max_results}",
+            "\n\n[config] tree_depth={}{}, tree_size={}KB, max_turns={max_turns}, max_results={max_results}",
             result.meta.tree_depth.unwrap_or_default(),
             fb_note,
-            "",
             result.meta.tree_size_kb.unwrap_or_default()
         ));
     }

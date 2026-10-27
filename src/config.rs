@@ -30,7 +30,9 @@ pub(crate) const FC_LINE_MAX_CHARS_RANGE: std::ops::RangeInclusive<usize> = 20..
 
 /// Default Windsurf application version sent in protocol metadata.
 pub const DEFAULT_WS_APP_VER: &str = "1.48.2";
-/// Default Windsurf language-server version sent in protocol metadata.
+/// Default IDE version sent in protocol metadata field 7 `ide_version`.
+pub const DEFAULT_WS_IDE_VER: &str = "1.126.0";
+/// Default language-server version used in the streaming Baggage header.
 pub const DEFAULT_WS_LS_VER: &str = "1.9544.35";
 
 const CONSTRAINED_ENV_NAMES: [&str; 9] = [
@@ -105,6 +107,10 @@ pub(crate) fn fc_line_max_chars(override_value: Option<usize>) -> usize {
 
 pub(crate) fn ws_app_version(override_value: Option<&str>) -> String {
     protocol_setting(override_value, "WS_APP_VER", DEFAULT_WS_APP_VER)
+}
+
+pub(crate) fn ws_ide_version(override_value: Option<&str>) -> String {
+    protocol_setting(override_value, "WS_IDE_VER", DEFAULT_WS_IDE_VER)
 }
 
 pub(crate) fn ws_ls_version(override_value: Option<&str>) -> String {

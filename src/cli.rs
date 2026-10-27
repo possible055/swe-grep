@@ -2,8 +2,9 @@ use crate::config;
 use crate::core::{
     SearchOptions, extract_key, format_search_success, mask_api_key, save_cached_api_key, search,
 };
+use crate::executor::ripgrep::resolve_rg_path;
 use crate::path_filter::PathFilterConfig;
-use crate::rg::resolve_rg_path;
+use crate::self_update::{self, SelfUpdateArgs};
 use clap::{Args, Parser, Subcommand};
 use std::env;
 use std::fs;
@@ -33,6 +34,12 @@ enum Commands {
         about = "Extract Windsurf API key from local database"
     )]
     ExtractKey(ExtractKeyArgs),
+    #[command(
+        name = "self-update",
+        alias = "update",
+        about = "Check for updates and upgrade swe-grep in-place"
+    )]
+    SelfUpdate(SelfUpdateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -83,6 +90,7 @@ pub fn run() -> i32 {
                 config::fc_timeout_ms(),
             )
         }
+        Commands::SelfUpdate(args) => self_update::run(args),
     }
 }
 

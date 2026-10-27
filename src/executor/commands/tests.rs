@@ -1,6 +1,6 @@
+use crate::executor::ripgrep::resolve_rg_path;
 use crate::executor::{InstantContextToolCall, ToolExecutionStatus, ToolExecutor};
 use crate::path_filter::PathFilterConfig;
-use crate::rg::resolve_rg_path;
 use serde_json::json;
 use std::fs;
 use std::process::Command;
@@ -179,6 +179,15 @@ fn exec_command_glob_supports_recursive_patterns() {
     assert!(res.contains("/codebase/dir1/test1.py"));
     assert!(res.contains("/codebase/dir2/test2.py"));
     assert!(!res.contains("other.txt"));
+
+    let res_backslash = executor.exec_command(&json!({
+        "type": "glob",
+        "pattern": "**\\test*.py",
+        "path": "/codebase",
+        "type_filter": "all"
+    }));
+    assert!(res_backslash.contains("/codebase/dir1/test1.py"));
+    assert!(res_backslash.contains("/codebase/dir2/test2.py"));
 }
 
 #[test]
@@ -191,7 +200,7 @@ fn glob_rejects_invalid_patterns_and_marks_the_hundred_match_limit() {
 
     let invalid = executor.exec_command(&json!({
         "type": "glob",
-        "pattern": "bad\\",
+        "pattern": "[",
         "path": "/codebase"
     }));
     assert!(invalid.starts_with("Error: invalid glob pattern"));

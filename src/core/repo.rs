@@ -22,41 +22,31 @@ pub fn get_repo_map(
 ) -> RepoMap {
     let executor =
         ToolExecutor::with_limits_and_filter(project_root, None, None, path_filter_config.clone());
-    get_repo_map_with_executor(project_root, target_depth, &executor)
+    get_repo_map_with_executor(target_depth, &executor)
 }
 
-pub(crate) fn get_repo_map_with_executor(
-    project_root: &Path,
-    target_depth: usize,
-    executor: &ToolExecutor,
-) -> RepoMap {
-    let entries = match executor.visible_entries(project_root) {
+pub(crate) fn get_repo_map_with_executor(target_depth: usize, executor: &ToolExecutor) -> RepoMap {
+    let root = executor.root();
+    let entries = match executor.visible_entries(root) {
         Ok(entries) => entries,
         Err(_) => return inaccessible_repo_map(),
     };
-    if target_depth == 0 || manifest_size(project_root, &entries) > MAX_TREE_BYTES {
-        return root_fallback(project_root, entries);
+    if target_depth == 0 || manifest_size(root, &entries) > MAX_TREE_BYTES {
+        return root_fallback(root, entries);
     }
 
     let mut nodes = entries
         .into_iter()
         .map(ManifestNode::new)
         .collect::<Vec<_>>();
-    let mut best_tree = render_manifest(project_root, &nodes);
+    let mut best_tree = render_manifest(root, &nodes);
     let mut best_depth = 1;
     let mut current_size = best_tree.len();
 
     for depth in 2..=target_depth {
-        match expand_manifest_depth(
-            &mut nodes,
-            1,
-            depth - 1,
-            project_root,
-            executor,
-            &mut current_size,
-        ) {
+        match expand_manifest_depth(&mut nodes, 1, depth - 1, root, executor, &mut current_size) {
             Ok(true) => {
-                best_tree = render_manifest(project_root, &nodes);
+                best_tree = render_manifest(root, &nodes);
                 best_depth = depth;
             }
             Ok(false) | Err(_) => break,
@@ -151,11 +141,23 @@ fn append_manifest_nodes(tree: &mut String, project_root: &Path, nodes: &[Manife
 }
 
 fn manifest_line(project_root: &Path, path: &Path, is_dir: bool) -> String {
-    let mut rel = path
+    let rel_opt = path
         .strip_prefix(project_root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
+        .ok()
+        .map(|rel| rel.to_string_lossy().replace('\\', "/"));
+    #[cfg(windows)]
+    let rel_opt = rel_opt.or_else(|| {
+        let path_s = path.to_string_lossy();
+        let root_s = project_root.to_string_lossy();
+        let path_clean = path_s.strip_prefix(r"\\?\").unwrap_or(&path_s);
+        let root_clean = root_s.strip_prefix(r"\\?\").unwrap_or(&root_s);
+        Path::new(path_clean)
+            .strip_prefix(Path::new(root_clean))
+            .ok()
+            .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+    });
+
+    let mut rel = rel_opt.unwrap_or_else(|| path.to_string_lossy().replace('\\', "/"));
     if is_dir {
         rel.push('/');
     }

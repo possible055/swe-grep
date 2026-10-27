@@ -3,12 +3,13 @@ mod credentials;
 mod error;
 mod http;
 mod output;
+pub(crate) mod protobuf;
 mod protocol;
 mod repo;
 mod search;
 mod types;
 
-pub use crate::config::{DEFAULT_WS_APP_VER, DEFAULT_WS_LS_VER};
+pub use crate::config::{DEFAULT_WS_APP_VER, DEFAULT_WS_IDE_VER, DEFAULT_WS_LS_VER};
 pub use auth::{check_auth, fetch_jwt, get_api_key, get_cached_jwt, get_jwt_exp};
 pub use credentials::{
     ExtractKeyResult, classify_api_key, discover_api_key, extract_key, get_config_path,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::protobuf::{ProtobufEncoder, connect_frame_encode};
+use crate::core::protobuf::{ProtobufEncoder, connect_frame_encode, decode_varint};
 
 #[test]
 fn trim_messages_keeps_head_bridge_and_tail() {
@@ -31,7 +31,7 @@ fn message_role_wire_values_match_existing_protocol_numbers() {
 
 #[test]
 fn build_system_prompt_contains_required_protocol_keywords() {
-    let prompt = build_system_prompt(3, 6, 5);
+    let prompt = build_system_prompt(3, 6);
 
     for keyword in [
         "/codebase",
@@ -43,6 +43,7 @@ fn build_system_prompt_contains_required_protocol_keywords() {
         "tree",
         "ls",
         "glob",
+        "FAST-SEARCH",
         "6",
         "3",
     ] {
@@ -54,14 +55,38 @@ fn build_system_prompt_contains_required_protocol_keywords() {
 }
 
 #[test]
-fn final_force_answer_prompt_matches_windsurf_source() {
+fn final_force_answer_prompt_matches_official_source() {
     assert_eq!(
         FINAL_FORCE_ANSWER,
-        "No search turns remain. You MUST call the answer tool now, even if the answer is incomplete."
+        "You have no turns left. Now you MUST provide your final ANSWER, even if it's not complete."
     );
-    assert!(FINAL_FORCE_ANSWER.contains("MUST"));
-    assert!(FINAL_FORCE_ANSWER.contains("answer tool"));
-    assert!(FINAL_FORCE_ANSWER.contains("incomplete"));
+}
+
+#[test]
+fn build_request_writes_official_version_metadata() {
+    let proto = build_request(
+        "test-api-key",
+        "test.jwt.token",
+        &[ChatMessage::simple(MessageRole::User, "query")],
+        "[]",
+        Some("app-version"),
+        Some("ide-version"),
+    );
+    let (tag, offset) = decode_varint(&proto, 0);
+    assert_eq!(tag, 0x0a);
+    let (length, offset) = decode_varint(&proto, offset);
+    let metadata = &proto[offset..offset + length as usize];
+    let mut fields = std::collections::BTreeMap::new();
+    let mut offset = 0;
+    while offset < metadata.len() {
+        let (tag, next) = decode_varint(metadata, offset);
+        assert_eq!(tag & 7, 2);
+        let (length, next) = decode_varint(metadata, next);
+        offset = next + length as usize;
+        fields.insert(tag >> 3, &metadata[next..offset]);
+    }
+    assert_eq!(fields.get(&2).copied(), Some(b"app-version".as_slice()));
+    assert_eq!(fields.get(&7).copied(), Some(b"ide-version".as_slice()));
 }
 
 #[test]

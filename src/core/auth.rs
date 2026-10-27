@@ -1,4 +1,4 @@
-use crate::protobuf::{ProtobufEncoder, extract_strings};
+use super::protobuf::{ProtobufEncoder, extract_strings};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE;
 use serde_json::Value;
@@ -60,6 +60,10 @@ pub fn get_api_key(api_key: Option<&str>, save_discovered: bool) -> Result<Strin
 
 pub(super) fn ws_app_version(value: Option<&str>) -> String {
     crate::config::ws_app_version(value)
+}
+
+pub(super) fn ws_ide_version(value: Option<&str>) -> String {
+    crate::config::ws_ide_version(value)
 }
 
 pub(super) fn ws_ls_version(value: Option<&str>) -> String {
@@ -127,9 +131,8 @@ pub async fn fetch_jwt(api_key: &str, timeout_ms: u64) -> Result<String, FastCon
     meta.write_string(2, &ws_app_version(None));
     meta.write_string(3, api_key);
     meta.write_string(4, "zh-cn");
-    meta.write_string(7, &ws_ls_version(None));
+    meta.write_string(7, &ws_ide_version(None));
     meta.write_string(12, WS_APP);
-    meta.write_bytes(30, b"\x00\x01");
 
     let mut outer = ProtobufEncoder::new();
     outer.write_message(1, &meta);

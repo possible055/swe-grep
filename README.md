@@ -20,21 +20,37 @@ AI-powered semantic code search CLI. Ask questions in natural language and get t
 ### Linux
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh \
+  && rm -f /tmp/install.sh
 ```
 
 Non-interactive installation:
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
-  | sh -s -- --host agents --scope user --yes
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --host agents --scope user --yes \
+  && rm -f /tmp/install.sh
+```
+
+To upgrade an existing installation while preserving your configuration (`.env`, `include.txt`, `exclude.txt`), pass `--force`:
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --force \
+  && rm -f /tmp/install.sh
 ```
 
 Uninstall (pass the same `--host` and `--scope` used during installation):
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
-  | sh -s -- --uninstall --host agents --scope user --yes
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --uninstall --host agents --scope user --yes \
+  && rm -f /tmp/install.sh
 ```
 
 **Installer options:**
@@ -50,19 +66,25 @@ curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/inst
 ### Windows
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 | iex
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer; Remove-Item -Force $installer
 ```
 
 Non-interactive installation:
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Client agents -Scope user -Yes
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Client agents -Scope user -Yes; Remove-Item -Force $installer
+```
+
+To upgrade an existing installation while preserving your configuration (`.env`, `include.txt`, `exclude.txt`), pass `-Force`:
+
+```powershell
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Force; Remove-Item -Force $installer
 ```
 
 Uninstall:
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Uninstall -Client agents -Scope user -Yes
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Uninstall -Client agents -Scope user -Yes; Remove-Item -Force $installer
 ```
 
 Windows installer options mirror Linux: `-Client agents|cursor|claude|custom`, `-Scope user|project`, `-Force`, `-Yes`. Requires Windows 10+ / Windows Server 2016+ on x64.
@@ -94,6 +116,28 @@ swe-grep extract-key --db-path /path/to/state.vscdb  # read a specific database
 ```
 
 `--save` writes to `~/.config/swe-tools/config.json` (macOS/Linux) or `~/swe-tool/config.json` (Windows).
+
+### Self Update
+
+Upgrade `swe-grep` in-place to the latest release while preserving custom configurations (`.env`, `include.txt`, `exclude.txt`) and automatically syncing managed Agent Skills:
+
+```bash
+swe-grep self-update
+```
+
+Optional flags:
+
+```bash
+swe-grep self-update --check                  # Check if a new version is available
+swe-grep self-update --force                  # Reinstall even if already at latest version
+swe-grep self-update --yes                    # Non-interactive mode (auto-confirm)
+swe-grep self-update --tag v0.1.9 --force     # Reinstall or downgrade to a specific tag
+swe-grep self-update --tag v0.1.11 --release-base-url URL  # Download from a mirror
+```
+
+`swe-grep update` is also available as an alias.
+
+Custom mirrors require `--tag` to identify the target version. The base URL must point directly to that release's asset directory; the tag is not appended to the URL.
 
 ## Authentication
 
@@ -148,8 +192,9 @@ The CLI loads `.env` from the shared runtime directory at startup. All packaged 
 | --- | --- | --- |
 | `WINDSURF_API_KEY` | — | Windsurf API key |
 | `SWEGREP_RG_PATH` | — | Custom `rg` binary path |
-| `WS_APP_VER` | `1.48.2` | Windsurf app version metadata |
-| `WS_LS_VER` | `1.9544.35` | Windsurf language server version metadata |
+| `WS_APP_VER` | `1.48.2` | Metadata `extension_version`; matches the official `codeiumVersion` |
+| `WS_IDE_VER` | `1.126.0` | Metadata `ide_version` (IDE/app version) |
+| `WS_LS_VER` | `1.9544.35` | Language-server version in the streaming `Baggage` header |
 | `SWEGREP_PATH_FILTER` | `1` | Enable path filtering (`1/0`, `true/false`, `yes/no`, `on/off`) |
 | `FC_MAX_COMMANDS` | `8` | Max parallel commands per search round (`1..8`) |
 | `FC_RESULT_MAX_LINES` | `80` | Max lines for non-`readfile` tool results (`1..500`) |

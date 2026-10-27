@@ -1,9 +1,9 @@
 use super::debug::debug_parsed_turn_summary;
 use super::*;
+use crate::core::protobuf::{ProtobufEncoder, connect_frame_encode};
 use crate::core::protocol::{FINAL_FORCE_ANSWER, ParsedModelTurn, parse_response};
 use crate::core::repo::RepoMap;
 use crate::executor::{InstantContextTiming, InstantContextToolUpdate, ToolExecutionStatus};
-use crate::protobuf::{ProtobufEncoder, connect_frame_encode};
 use std::collections::VecDeque;
 use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};

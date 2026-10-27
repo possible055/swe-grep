@@ -180,7 +180,7 @@ impl ToolExecutor {
         matches.truncate(GLOB_RESULT_LIMIT);
         let mut output = self.bounded_text(TruncationProfile::General);
         for entry in matches {
-            if !output.push_line(&self.remap(&entry.path.to_string_lossy())) {
+            if !output.push_line(&self.virtual_path(&entry.path)) {
                 break;
             }
         }
@@ -248,10 +248,11 @@ impl ToolExecutor {
 
 fn compile_glob_matcher(pattern: &str, recursive: bool) -> Result<GlobSet, globset::Error> {
     let mut builder = GlobSetBuilder::new();
-    builder.add(Glob::new(pattern)?);
+    let normalized = pattern.replace('\\', "/");
+    builder.add(Glob::new(&normalized)?);
     if recursive
-        && let Some(clean_pattern) = pattern.strip_prefix("**/")
-        && clean_pattern != pattern
+        && let Some(clean_pattern) = normalized.strip_prefix("**/")
+        && clean_pattern != normalized
     {
         builder.add(Glob::new(clean_pattern)?);
     }

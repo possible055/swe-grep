@@ -20,21 +20,37 @@ AI 驱动的语义代码搜索 CLI。用自然语言提问，从代码库中获�
 ### Linux
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh \
+  && rm -f /tmp/install.sh
 ```
 
 非交互式安装：
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
-  | sh -s -- --host agents --scope user --yes
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --host agents --scope user --yes \
+  && rm -f /tmp/install.sh
+```
+
+若需升级已存在的安装并保留自定义配置文件（`.env`、`include.txt`、`exclude.txt`），请传入 `--force`：
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --force \
+  && rm -f /tmp/install.sh
 ```
 
 卸载（传入安装时使用的相同 `--host` 和 `--scope`）：
 
 ```bash
-curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/install.sh \
-  | sh -s -- --uninstall --host agents --scope user --yes
+curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 10 \
+  https://github.com/possible055/swe-grep/releases/latest/download/install.sh -o /tmp/install.sh \
+  && sh /tmp/install.sh --uninstall --host agents --scope user --yes \
+  && rm -f /tmp/install.sh
 ```
 
 **安装器选项：**
@@ -50,19 +66,25 @@ curl -fsSL https://github.com/possible055/swe-grep/releases/latest/download/inst
 ### Windows
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 | iex
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer; Remove-Item -Force $installer
 ```
 
 非交互式安装：
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Client agents -Scope user -Yes
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Client agents -Scope user -Yes; Remove-Item -Force $installer
+```
+
+若需升级已存在的安装并保留自定义配置文件（`.env`、`include.txt`、`exclude.txt`），请传入 `-Force`：
+
+```powershell
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Force; Remove-Item -Force $installer
 ```
 
 卸载：
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1))) -Uninstall -Client agents -Scope user -Yes
+$ProgressPreference = 'SilentlyContinue'; $installer = Join-Path $env:TEMP "install.ps1"; irm https://github.com/possible055/swe-grep/releases/latest/download/install.ps1 -OutFile $installer -ErrorAction Stop; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Uninstall -Client agents -Scope user -Yes; Remove-Item -Force $installer
 ```
 
 Windows 安装器选项与 Linux 对应：`-Client agents|cursor|claude|custom`、`-Scope user|project`、`-Force`、`-Yes`。要求 Windows 10+ / Windows Server 2016+，x64 环境。
@@ -94,6 +116,28 @@ swe-grep extract-key --db-path /path/to/state.vscdb  # 读取指定数据库
 ```
 
 `--save` 写入 `~/.config/swe-tools/config.json`（macOS/Linux）或 `~/swe-tool/config.json`（Windows）。
+
+### 自我更新
+
+就地将 `swe-grep` 升级至最新发行版，同时完整保留自定义配置文件（`.env`、`include.txt`、`exclude.txt`）并自动同步已注册的受管 Agent Skills：
+
+```bash
+swe-grep self-update
+```
+
+可选参数：
+
+```bash
+swe-grep self-update --check                  # 仅检查是否有新版本
+swe-grep self-update --force                  # 强制重新安装，即使已是最新版本
+swe-grep self-update --yes                    # 非交互模式（自动确认）
+swe-grep self-update --tag v0.1.9 --force     # 重新安裝或降級至指定版本
+swe-grep self-update --tag v0.1.11 --release-base-url URL  # 從鏡像下載
+```
+
+`swe-grep update` 亦可作为兼容别名使用。
+
+自訂鏡像必須透過 `--tag` 指定目標版本。基礎 URL 須直接指向該版本的發行資產目錄；程式不會將版本標籤附加至 URL。
 
 ## 身份验证
 
@@ -144,8 +188,9 @@ CLI 启动时会从共享 runtime 目录加载 `.env` 文件。打包的值默�
 | --- | --- | --- |
 | `WINDSURF_API_KEY` | — | Windsurf API 密钥 |
 | `SWEGREP_RG_PATH` | — | 自定义 `rg` 二进制文件路径 |
-| `WS_APP_VER` | `1.48.2` | Windsurf 应用版本元数据 |
-| `WS_LS_VER` | `1.9544.35` | Windsurf 语言服务器版本元数据 |
+| `WS_APP_VER` | `1.48.2` | 协议元数据 `extension_version`；与官方 `codeiumVersion` 一致 |
+| `WS_IDE_VER` | `1.126.0` | 协议元数据 `ide_version`（IDE/应用版本） |
+| `WS_LS_VER` | `1.9544.35` | 流式请求 `Baggage` 头中的语言服务器版本 |
 | `SWEGREP_PATH_FILTER` | `1` | 启用路径过滤（`1/0`、`true/false`、`yes/no`、`on/off`） |
 | `FC_MAX_COMMANDS` | `8` | 每轮搜索的最大并行命令数（`1..8`） |
 | `FC_RESULT_MAX_LINES` | `80` | 非 `readfile` 工具结果的最大行数（`1..500`） |

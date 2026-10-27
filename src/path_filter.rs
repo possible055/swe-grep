@@ -124,15 +124,37 @@ impl PathFilter {
     }
 
     fn relative_path(&self, path: &Path) -> PathBuf {
-        path.strip_prefix(&self.root).unwrap_or(path).to_path_buf()
+        if let Ok(rel) = path.strip_prefix(&self.root) {
+            return rel.to_path_buf();
+        }
+
+        #[cfg(windows)]
+        {
+            if let Ok(canon) = path.canonicalize() {
+                if let Ok(rel) = canon.strip_prefix(&self.root) {
+                    return rel.to_path_buf();
+                }
+            }
+            let path_s = path.to_string_lossy();
+            let root_s = self.root.to_string_lossy();
+            let path_clean = path_s.strip_prefix(r"\\?\").unwrap_or(&path_s);
+            let root_clean = root_s.strip_prefix(r"\\?\").unwrap_or(&root_s);
+            if let Ok(rel) = Path::new(path_clean).strip_prefix(Path::new(root_clean)) {
+                return rel.to_path_buf();
+            }
+        }
+
+        path.to_path_buf()
     }
 
     fn matches_gitignore(&self, path: &Path, is_dir: bool) -> bool {
         let mut ignored = false;
+        let rel = self.relative_path(path);
+        let check_path = self.root.join(&rel);
         for dir in self.gitignore_dirs(path) {
             match self
                 .gitignore_for_dir(&dir)
-                .matched_path_or_any_parents(path, is_dir)
+                .matched_path_or_any_parents(&check_path, is_dir)
             {
                 Match::Ignore(_) => ignored = true,
                 Match::Whitelist(_) => ignored = false,
@@ -143,9 +165,10 @@ impl PathFilter {
     }
 
     fn gitignore_dirs(&self, path: &Path) -> Vec<PathBuf> {
-        let Ok(rel) = path.strip_prefix(&self.root) else {
+        let rel = self.relative_path(path);
+        if rel == path && path != self.root {
             return vec![self.root.clone()];
-        };
+        }
         let mut dirs = vec![self.root.clone()];
         let Some(parent) = rel.parent() else {
             return dirs;

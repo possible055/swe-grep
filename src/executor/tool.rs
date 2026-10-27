@@ -173,6 +173,10 @@ impl ToolExecutor {
         self.path_filter.is_enabled()
     }
 
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn real(&self, virtual_path: &str) -> PathBuf {
         if virtual_path.is_empty() {
             return self.root.clone();
@@ -204,12 +208,47 @@ impl ToolExecutor {
         }
     }
 
+    pub(super) fn virtual_path(&self, real_path: &Path) -> String {
+        let rel_opt = real_path
+            .strip_prefix(&self.root)
+            .ok()
+            .map(|rel| rel.to_string_lossy().replace('\\', "/"));
+        #[cfg(windows)]
+        let rel_opt = rel_opt.or_else(|| {
+            let real_s = real_path.to_string_lossy();
+            let root_s = self.root.to_string_lossy();
+            let real_clean = real_s.strip_prefix(r"\\?\").unwrap_or(&real_s);
+            let root_clean = root_s.strip_prefix(r"\\?\").unwrap_or(&root_s);
+            Path::new(real_clean)
+                .strip_prefix(Path::new(root_clean))
+                .ok()
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        });
+
+        let rel = rel_opt.unwrap_or_else(|| real_path.to_string_lossy().replace('\\', "/"));
+        let rel = rel.trim_start_matches('/');
+        if rel.is_empty() {
+            "/codebase".to_string()
+        } else {
+            format!("/codebase/{rel}")
+        }
+    }
+
     pub(super) fn remap(&self, text: &str) -> String {
         let root_native = self.root.to_string_lossy();
         let root_slash = self.root.to_string_lossy().replace('\\', "/");
         let mut remapped = text.replace(root_native.as_ref(), "/codebase");
         if root_native != root_slash {
             remapped = remapped.replace(&root_slash, "/codebase");
+        }
+        #[cfg(windows)]
+        {
+            let root_clean = root_native.strip_prefix(r"\\?\").unwrap_or(&root_native);
+            let root_clean_slash = root_clean.replace('\\', "/");
+            remapped = remapped.replace(root_clean, "/codebase");
+            if root_clean != root_clean_slash {
+                remapped = remapped.replace(&root_clean_slash, "/codebase");
+            }
         }
         remapped
     }
@@ -341,7 +380,11 @@ mod tests {
         );
         assert_eq!(
             executor.real("/codebase/sub/file.py"),
-            tmp.path().join("sub").join("file.py")
+            tmp.path()
+                .canonicalize()
+                .unwrap()
+                .join("sub")
+                .join("file.py")
         );
         assert_eq!(
             executor.real("/codebase/../../etc/passwd"),

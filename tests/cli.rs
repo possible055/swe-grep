@@ -126,3 +126,46 @@ fn search_warns_once_for_an_invalid_environment_value() {
     assert_eq!(stderr.matches(warning).count(), 1);
     assert!(stderr.contains("ripgrep"));
 }
+
+#[test]
+fn self_update_fails_on_unmanaged_installation() {
+    let output = Command::cargo_bin("swe-grep")
+        .unwrap()
+        .args(["self-update"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Cannot update unmanaged installation"));
+}
+
+#[test]
+fn self_update_help_shows_options() {
+    let output = Command::cargo_bin("swe-grep")
+        .unwrap()
+        .args(["self-update", "--help"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--check"));
+    assert!(stdout.contains("--force"));
+    assert!(stdout.contains("--tag"));
+    assert!(stdout.contains("--release-base-url"));
+    assert!(stdout.contains("--yes"));
+}
+
+#[test]
+fn self_update_alias_update_works() {
+    let output = Command::cargo_bin("swe-grep")
+        .unwrap()
+        .args(["update", "--help"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--check"));
+}

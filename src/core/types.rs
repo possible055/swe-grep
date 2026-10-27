@@ -58,7 +58,11 @@ pub struct SearchOptions {
     pub project_root: PathBuf,
     pub api_key: Option<String>,
     pub jwt: Option<String>,
+    /// Metadata field 2 `extension_version`; defaults from `WS_APP_VER`.
     pub app_version: Option<String>,
+    /// Metadata field 7 `ide_version`; defaults from `WS_IDE_VER`.
+    pub ide_version: Option<String>,
+    /// Baggage `sentry-release` version on streaming requests; defaults from `WS_LS_VER`.
     pub ls_version: Option<String>,
     pub max_turns: usize,
     pub max_commands: usize,
@@ -78,6 +82,7 @@ impl SearchOptions {
             api_key: None,
             jwt: None,
             app_version: None,
+            ide_version: None,
             ls_version: None,
             max_turns: 4,
             max_commands: 8,

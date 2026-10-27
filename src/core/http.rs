@@ -1,4 +1,4 @@
-use crate::protobuf::{connect_frame_encode, gzip_compress, gzip_decompress};
+use super::protobuf::{connect_frame_encode, gzip_compress, gzip_decompress};
 use reqwest::header::{CONTENT_ENCODING, HeaderMap, HeaderName, HeaderValue};
 use serde_json::{Value, json};
 use std::sync::OnceLock;
@@ -221,8 +221,8 @@ pub(super) async fn streaming_request(
 
 #[cfg(test)]
 mod tests {
+    use super::super::protobuf::gzip_compress;
     use super::*;
-    use crate::protobuf::gzip_compress;
 
     #[test]
     fn decode_unary_response_decompresses_gzip() {

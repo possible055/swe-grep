@@ -1,5 +1,5 @@
+use super::super::ripgrep::{resolve_rg_path, ripgrep_not_found_message};
 use super::super::{BoundedText, ToolExecutor, TruncationProfile};
-use crate::rg::{resolve_rg_path, ripgrep_not_found_message};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, BufReader, Read};
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn invalid_path_glob_is_rejected() {
-        let patterns = vec!["bad\\".to_string()];
+        let patterns = vec!["[".to_string()];
         let error = RgPathMatchers::new(Some(&patterns), None)
             .err()
             .expect("invalid glob should fail");

@@ -1,5 +1,5 @@
 use crate::config;
-use crate::protobuf::{connect_frame_decode, extract_strings};
+use crate::core::protobuf::{connect_frame_decode, extract_strings};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};

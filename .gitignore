@@ -31,7 +31,8 @@ CLAUDE.md
 
 # Project-specific
 local
-repos
+knowledge
+vendor-src
 
 # Logs / Env
 *.log

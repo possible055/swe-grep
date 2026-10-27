@@ -42,7 +42,8 @@ deny = [
 
 skip = [
     { crate = "getrandom@0.2.17", reason = "pulled by ring through rustls" },
-    { crate = "getrandom@0.4.2", reason = "pulled by uuid and dev-only tempfile" },
+    { crate = "getrandom@0.4.3", reason = "pulled by uuid, tempfile, and zip" },
+    { crate = "windows-sys@0.52.0", reason = "rustix, tempfile, self-replace, ring, and winapi-util still on 0.52 while clap, tokio, and zip use 0.61" },
 ]
 
 [sources]

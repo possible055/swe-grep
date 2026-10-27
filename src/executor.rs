@@ -1,4 +1,5 @@
 mod commands;
+pub(crate) mod ripgrep;
 mod tool;
 mod types;
 

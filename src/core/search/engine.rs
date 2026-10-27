@@ -151,10 +151,9 @@ where
     }
     options.max_commands = options.max_commands.clamp(1, 8);
     let tool_defs = get_tool_definitions(options.max_commands);
-    let system_prompt =
-        build_system_prompt(options.max_turns, options.max_commands, options.max_results);
+    let system_prompt = build_system_prompt(options.max_turns, options.max_commands);
 
-    let repo_map = get_repo_map_with_executor(&project_root, options.tree_depth, &executor);
+    let repo_map = get_repo_map_with_executor(options.tree_depth, &executor);
     log(&format!(
         "Repo map: scope snapshot depth {} ({:.1}KB){}",
         repo_map.depth,
@@ -191,7 +190,7 @@ where
             &messages,
             &tool_defs,
             options.app_version.as_deref(),
-            options.ls_version.as_deref(),
+            options.ide_version.as_deref(),
         );
 
         let mut response = match streaming(proto, timeout_ms, 2, options.ls_version.clone()).await {
@@ -214,7 +213,7 @@ where
                         &messages,
                         &tool_defs,
                         options.app_version.as_deref(),
-                        options.ls_version.as_deref(),
+                        options.ide_version.as_deref(),
                     );
                     match streaming(retry_proto, timeout_ms, 2, options.ls_version.clone()).await {
                         Ok(response) => response,
@@ -255,7 +254,7 @@ where
                 &messages,
                 &tool_defs,
                 options.app_version.as_deref(),
-                options.ls_version.as_deref(),
+                options.ide_version.as_deref(),
             );
             response = match streaming(retry_proto, timeout_ms, 2, options.ls_version.clone()).await
             {

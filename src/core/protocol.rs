@@ -1,4 +1,4 @@
-use crate::protobuf::{ProtobufEncoder, connect_frame_decode, extract_strings};
+use super::protobuf::{ProtobufEncoder, connect_frame_decode, extract_strings};
 use regex::Regex;
 use serde_json::{Value, json};
 use std::env;
@@ -6,7 +6,7 @@ use std::env;
 mod repair;
 
 use super::WS_APP;
-use super::auth::{ws_app_version, ws_ls_version};
+use super::auth::{ws_app_version, ws_ide_version};
 use repair::parse_tool_call_args;
 
 #[derive(Debug, Clone)]
@@ -72,7 +72,7 @@ fn build_metadata(
     api_key: &str,
     jwt: &str,
     app_version: Option<&str>,
-    ls_version: Option<&str>,
+    ide_version: Option<&str>,
 ) -> ProtobufEncoder {
     let mut meta = ProtobufEncoder::new();
     meta.write_string(1, WS_APP);
@@ -101,7 +101,7 @@ fn build_metadata(
         })
         .to_string(),
     );
-    meta.write_string(7, &ws_ls_version(ls_version));
+    meta.write_string(7, &ws_ide_version(ide_version));
 
     let cpu_count = std::thread::available_parallelism()
         .map(usize::from)
@@ -122,7 +122,6 @@ fn build_metadata(
     );
     meta.write_string(12, WS_APP);
     meta.write_string(21, jwt);
-    meta.write_bytes(30, b"\x00\x01");
     meta
 }
 
@@ -156,10 +155,10 @@ pub(crate) fn build_request(
     messages: &[ChatMessage],
     tool_defs: &str,
     app_version: Option<&str>,
-    ls_version: Option<&str>,
+    ide_version: Option<&str>,
 ) -> Vec<u8> {
     let mut req = ProtobufEncoder::new();
-    req.write_message(1, &build_metadata(api_key, jwt, app_version, ls_version));
+    req.write_message(1, &build_metadata(api_key, jwt, app_version, ide_version));
 
     for message in messages {
         let msg = build_chat_message(message);
@@ -368,6 +367,15 @@ const SYSTEM_PROMPT_TEMPLATE: &str = r#"Search the codebase based on the user's 
   }
 }
 
+# FAST-SEARCH DEFAULTS (optimize rg/tree on large repos)
+
+* Start NARROW, then widen only if needed. Prefer searching likely code roots first (e.g., `src/`, `lib/`, `app/`, `packages/`, `services/`) instead of `/codebase`.
+* Prefer fixed-string search for literals: escape patterns or keep regex simple. Use smart case; avoid case-insensitive unless necessary.
+* Prefer file-type filters and globs (in include) over full-repo scans.
+* Default EXCLUDES for speed (apply via the exclude array): node_modules, .git, dist, build, coverage, .venv, venv, target, out, .cache, __pycache__, vendor, deps, third_party, logs, data, *.min.*
+* Skip huge files where possible; when opening files, prefer reading only relevant ranges with readfile.
+* Limit directory traversal with tree levels to quickly orient before deeper inspection.
+
 # ANSWER FORMAT
 
 Strictly follow this format, including the tags.
@@ -389,7 +397,7 @@ Do NOT return irrelevant files, such as entry points or configuration files, mer
 "#;
 
 pub(crate) const FINAL_FORCE_ANSWER: &str =
-    "No search turns remain. You MUST call the answer tool now, even if the answer is incomplete.";
+    "You have no turns left. Now you MUST provide your final ANSWER, even if it's not complete.";
 
 pub fn get_tool_definitions(max_commands: usize) -> String {
     let max_commands = max_commands.clamp(1, 8);
@@ -479,7 +487,7 @@ pub fn get_tool_definitions(max_commands: usize) -> String {
     .to_string()
 }
 
-pub fn build_system_prompt(max_turns: usize, max_commands: usize, _max_results: usize) -> String {
+pub fn build_system_prompt(max_turns: usize, max_commands: usize) -> String {
     let max_commands = max_commands.clamp(1, 8);
     SYSTEM_PROMPT_TEMPLATE
         .replace("{max_commands}", &max_commands.to_string())
