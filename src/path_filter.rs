@@ -130,10 +130,10 @@ impl PathFilter {
 
         #[cfg(windows)]
         {
-            if let Ok(canon) = path.canonicalize() {
-                if let Ok(rel) = canon.strip_prefix(&self.root) {
-                    return rel.to_path_buf();
-                }
+            if let Ok(canon) = path.canonicalize()
+                && let Ok(rel) = canon.strip_prefix(&self.root)
+            {
+                return rel.to_path_buf();
             }
             let path_s = path.to_string_lossy();
             let root_s = self.root.to_string_lossy();

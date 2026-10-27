@@ -558,7 +558,6 @@ fn virtualize_rg_line(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn argument_budget_counts_all_arguments() {
@@ -592,6 +591,7 @@ mod tests {
     fn child_is_killed_and_reaped_at_the_deadline() {
         use std::fs;
         use std::os::unix::fs::PermissionsExt;
+        use std::time::Duration;
         use tempfile::TempDir;
 
         let tmp = TempDir::new().unwrap();
