@@ -447,7 +447,7 @@ function Invoke-Uninstall {
             Select-Object -First 1
     )
     if (-not $SkipConfirmation) {
-        $confirmation = Read-Host "Remove the managed Agent Skill at $DestinationPath? [y/N]"
+        $confirmation = Read-Host "Remove the managed Agent Skill at ${DestinationPath}? [y/N]"
         if ($confirmation -notin @('y', 'Y', 'yes', 'YES')) {
             Stop-Install 'Uninstallation cancelled.'
         }
@@ -591,7 +591,7 @@ Assert-NoExternalCommand $launcherPath $pathExtensions
 Assert-LauncherPreflight $launcherPath $launcherContent $launcherDirectory ([bool]$Force)
 
 if (-not $Yes) {
-    $confirmation = Read-Host "Install $archiveName runtime at $runtime and Skill at $destination? [y/N]"
+    $confirmation = Read-Host "Install $archiveName runtime at $runtime and Skill at ${destination}? [y/N]"
     if ($confirmation -notin @('y', 'Y', 'yes', 'YES')) {
         Stop-Install 'Installation cancelled.'
     }
