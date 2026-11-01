@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Windows installer
         if: runner.os == 'Windows'
@@ -260,7 +260,7 @@ jobs:
           & scripts/test-install-windows.ps1 -ReleaseDirectory (Resolve-Path dist).Path
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -281,7 +281,7 @@ jobs:
       MAX_GLIBC_VERSION: "2.24"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build release binary in old glibc container
         shell: bash
@@ -379,7 +379,7 @@ jobs:
           sha256sum "$GNU_ARCHIVE" > "$GNU_ARCHIVE.sha256"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.GNU_ARTIFACT }}
           path: |
@@ -399,10 +399,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
